@@ -4,8 +4,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size, STACK_TRUE, STACK_FALSE, TryInstruction};
+use super::{
+    offset_by_size, Dispatcher, Env, EnvId, Error, PassResult, TryInstruction, ERROR_EMPTY_STACK,
+    ERROR_INVALID_VALUE, STACK_FALSE, STACK_TRUE,
+};
 
 use std::marker::PhantomData;
 
@@ -20,7 +22,6 @@ instruction!(CONCAT, (a, b => c), b"\x86CONCAT");
 instruction!(SLICE, (a, b, c => d), b"\x85SLICE");
 instruction!(PAD, (a, b, c => d), b"\x83PAD");
 
-
 pub struct Handler<'a> {
     phantom: PhantomData<&'a ()>,
 }
@@ -30,30 +31,33 @@ builtins!("mod_binaries.psc");
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
         self.handle_builtins(env, instruction, pid)
-        .if_unhandled_try(|| self.handle_ltp(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_gtp(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_equal(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_concat(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_slice(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_pad(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_length(env, instruction, pid))
-        .if_unhandled_try(|| Err(Error::UnknownInstruction))
+            .if_unhandled_try(|| self.handle_ltp(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_gtp(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_equal(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_concat(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_slice(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_pad(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_length(env, instruction, pid))
+            .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
 
 impl<'a> Handler<'a> {
     pub fn new() -> Self {
-        Handler { phantom: PhantomData }
+        Handler {
+            phantom: PhantomData,
+        }
     }
 
     handle_builtins!();
 
     #[inline]
-    fn handle_equal(&mut self,
-                    env: &mut Env<'a>,
-                    instruction: &'a [u8],
-                    _: EnvId)
-                    -> PassResult<'a> {
+    fn handle_equal(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, EQUALQ);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -98,11 +102,12 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_concat(&mut self,
-                     env: &mut Env<'a>,
-                     instruction: &'a [u8],
-                     _: EnvId)
-                     -> PassResult<'a> {
+    fn handle_concat(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, CONCAT);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -118,11 +123,12 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_slice(&mut self,
-                    env: &mut Env<'a>,
-                    instruction: &'a [u8],
-                    _: EnvId)
-                    -> PassResult<'a> {
+    fn handle_slice(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, SLICE);
         let end = env.pop().ok_or_else(|| error_empty_stack!())?;
         let start = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -183,11 +189,12 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_length(&mut self,
-                     env: &mut Env<'a>,
-                     instruction: &'a [u8],
-                     _: EnvId)
-                     -> PassResult<'a> {
+    fn handle_length(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, LENGTH);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
 

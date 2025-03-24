@@ -4,22 +4,22 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::collections::BTreeMap;
 use std::io;
 use std::rc::Rc;
 use std::sync::mpsc;
-use std::collections::BTreeMap;
 
-use slab;
-use mio::channel as mio_chan;
+use mio::net::*;
+use mio::unix::UnixReady;
 use mio::*;
-use mio::tcp::*;
+use mio_extras::channel as mio_chan;
 
 use super::connection::Connection;
 
 type Slab<T> = slab::Slab<T, Token>;
 
 use pumpkindb_engine::messaging;
-use pumpkindb_engine::script::{EnvId, Sender, RequestMessage, ResponseMessage, SchedulerHandle};
+use pumpkindb_engine::script::{EnvId, RequestMessage, ResponseMessage, SchedulerHandle, Sender};
 
 use uuid::Uuid;
 
@@ -27,16 +27,18 @@ pub type RelayedPublishedMessage = (Vec<u8>, Vec<u8>, Vec<u8>);
 
 struct RelayedPublishedMessageSender {
     identifier: Vec<u8>,
-    sender: mio_chan::Sender<RelayedPublishedMessage>
+    sender: mio_chan::Sender<RelayedPublishedMessage>,
 }
 
-impl messaging::PublishedMessageCallback for RelayedPublishedMessageSender  {
+impl messaging::PublishedMessageCallback for RelayedPublishedMessageSender {
     fn call(&self, topic: &[u8], message: &[u8]) {
-        let _ = self.sender.send((self.identifier.clone(), topic.to_vec(), message.to_vec()));
+        let _ = self
+            .sender
+            .send((self.identifier.clone(), topic.to_vec(), message.to_vec()));
     }
 
-    fn cloned(&self) -> Box<messaging::PublishedMessageCallback + Send> {
-        Box::new(RelayedPublishedMessageSender{
+    fn cloned(&self) -> Box<dyn messaging::PublishedMessageCallback + Send> {
+        Box::new(RelayedPublishedMessageSender {
             identifier: self.identifier.clone(),
             sender: self.sender.clone(),
         })
@@ -57,19 +59,20 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(sock: TcpListener,
-               relay_sender: mio_chan::Sender<RelayedPublishedMessage>,
-               relay_receiver: mio_chan::Receiver<RelayedPublishedMessage>,
-               senders: Vec<Sender<RequestMessage>>)
-               -> Server {
+    pub fn new(
+        sock: TcpListener,
+        relay_sender: mio_chan::Sender<RelayedPublishedMessage>,
+        relay_receiver: mio_chan::Receiver<RelayedPublishedMessage>,
+        senders: Vec<Sender<RequestMessage>>,
+    ) -> Server {
         let (response_sender, _) = mpsc::channel();
 
         Server {
-            sock: sock,
-            senders: senders,
-            response_sender: response_sender,
-            relay_sender: relay_sender,
-            relay_receiver: relay_receiver,
+            sock,
+            senders,
+            response_sender,
+            relay_sender,
+            relay_receiver,
             token: Token(10_000_000),
             conns: Slab::with_capacity(128),
             session_token: BTreeMap::new(),
@@ -79,26 +82,19 @@ impl Server {
     }
 
     pub fn run(&mut self, poll: &mut Poll) -> io::Result<()> {
-
         self.register(poll)?;
 
-        let _ = poll.register(&self.relay_receiver,
-                              Token(1000000),
-                              Ready::all(),
-                              PollOpt::edge())
-            .or_else(|e| Err(e));
+        let _ = poll.register(
+            &self.relay_receiver,
+            Token(1000000),
+            Ready::all(),
+            PollOpt::edge(),
+        );
 
         loop {
-            let cnt = poll.poll(&mut self.events, None)?;
-
-            let mut i = 0;
-
-            while i < cnt {
-                let event = self.events.get(i).expect("Failed to get event");
-
-                self.ready(poll, event.token(), event.kind());
-
-                i += 1;
+            let events: Vec<_> = self.events.iter().collect();
+            for event in events {
+                self.ready(poll, event.token(), event.readiness());
             }
 
             self.tick(poll);
@@ -107,7 +103,6 @@ impl Server {
 
     pub fn register(&mut self, poll: &mut Poll) -> io::Result<()> {
         poll.register(&self.sock, self.token, Ready::readable(), PollOpt::edge())
-            .or_else(|e| Err(e))
     }
 
     fn tick(&mut self, poll: &mut Poll) {
@@ -117,11 +112,10 @@ impl Server {
             if c.is_reset() {
                 reset_tokens.push(c.token);
             } else if c.is_idle() {
-                c.reregister(poll)
-                    .unwrap_or_else(|_| {
-                        c.mark_reset();
-                        reset_tokens.push(c.token);
-                    });
+                c.reregister(poll).unwrap_or_else(|_| {
+                    c.mark_reset();
+                    reset_tokens.push(c.token);
+                });
             }
         }
 
@@ -136,13 +130,15 @@ impl Server {
     fn ready(&mut self, poll: &mut Poll, token: Token, event: Ready) {
         if token == Token(1000000) {
             let (session, _, msg) = self.relay_receiver.try_recv().unwrap();
-            let _ = poll.reregister(&self.relay_receiver,
-                                    Token(1000000),
-                                    Ready::all(),
-                                    PollOpt::edge());
+            let _ = poll.reregister(
+                &self.relay_receiver,
+                Token(1000000),
+                Ready::all(),
+                PollOpt::edge(),
+            );
             let target = match self.session_token.get(&session) {
-                Some(target) => target.clone(),
-                None => return
+                Some(target) => *target,
+                None => return,
             };
             let conn = self.find_connection_by_token(target);
             let _ = conn.send_message(Rc::new(msg));
@@ -150,12 +146,12 @@ impl Server {
             return;
         }
 
-        if event.is_error() {
+        if UnixReady::from(event).is_error() {
             self.find_connection_by_token(token).mark_reset();
             return;
         }
 
-        if event.is_hup() {
+        if UnixReady::from(event).is_hup() {
             self.find_connection_by_token(token).mark_reset();
             return;
         }
@@ -169,21 +165,22 @@ impl Server {
                 return;
             }
 
-            let _ = conn.writable()
-                .unwrap_or_else(|_| { conn.mark_reset(); });
+            conn.writable().unwrap_or_else(|_| {
+                conn.mark_reset();
+            });
         }
 
         if event.is_readable() {
             if self.token == token {
                 self.accept(poll);
             } else {
-
                 if self.find_connection_by_token(token).is_reset() {
                     return;
                 }
 
-                self.readable(token)
-                    .unwrap_or_else(|_| { self.find_connection_by_token(token).mark_reset(); });
+                self.readable(token).unwrap_or_else(|_| {
+                    self.find_connection_by_token(token).mark_reset();
+                });
             }
         }
 
@@ -224,13 +221,15 @@ impl Server {
         while let Some(message) = self.find_connection_by_token(token).readable()? {
             let id = EnvId::new();
             let session = self.token_session.get(&token).unwrap();
-            let _ = self.senders.schedule_env(id,
-                                                 message,
-                                                 self.response_sender.clone(),
-                                                 Box::new(RelayedPublishedMessageSender {
-                                                     identifier: session.to_vec(),
-                                                     sender: self.relay_sender.clone(),
-                                                 }));
+            self.senders.schedule_env(
+                id,
+                message,
+                self.response_sender.clone(),
+                Box::new(RelayedPublishedMessageSender {
+                    identifier: session.to_vec(),
+                    sender: self.relay_sender.clone(),
+                }),
+            );
         }
 
         Ok(())
@@ -239,5 +238,4 @@ impl Server {
     fn find_connection_by_token(&mut self, token: Token) -> &mut Connection {
         &mut self.conns[token]
     }
-
 }

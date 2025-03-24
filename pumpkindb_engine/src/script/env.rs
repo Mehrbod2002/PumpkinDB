@@ -4,9 +4,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use super::Error;
-use super::envheap::EnvHeap;
 use super::super::messaging;
+use super::envheap::EnvHeap;
+use super::Error;
 
 use std::collections::BTreeMap;
 
@@ -30,7 +30,7 @@ pub struct Env<'a> {
     // current TRY status
     pub tracking_errors: usize,
     pub aborting_try: Vec<Error>,
-    published_message_callback: Option<Box<messaging::PublishedMessageCallback + Send>>,
+    published_message_callback: Option<Box<dyn messaging::PublishedMessageCallback + Send>>,
 }
 
 impl<'a> ::std::fmt::Debug for Env<'a> {
@@ -41,7 +41,7 @@ impl<'a> ::std::fmt::Debug for Env<'a> {
 
 unsafe impl<'a> Send for Env<'a> {}
 
-const _EMPTY: &'static [u8] = b"";
+const _EMPTY: &[u8] = b"";
 
 use std::mem;
 
@@ -68,7 +68,7 @@ impl<'a> Env<'a> {
             stack: stacks,
             queue: VecDeque::new(),
             heap: EnvHeap::new(HEAP_SIZE),
-            dictionary: dictionary,
+            dictionary,
             tracking_errors: 0,
             aborting_try: Vec::new(),
             published_message_callback: None,
@@ -124,7 +124,12 @@ impl<'a> Env<'a> {
     /// Returns a copy of the entire stack
     #[inline]
     pub fn stack_copy(&self) -> Vec<Vec<u8>> {
-        self.stack.front().unwrap().into_iter().map(|v| Vec::from(*v)).collect()
+        self.stack
+            .front()
+            .unwrap()
+            .into_iter()
+            .map(|v| Vec::from(*v))
+            .collect()
     }
 
     /// Returns top of the stack without removing it
@@ -157,7 +162,6 @@ impl<'a> Env<'a> {
         Ok(unsafe { mem::transmute::<&mut [u8], &'a mut [u8]>(self.heap.alloc(len)) })
     }
 
-
     #[cfg(feature = "scoped_dictionary")]
     pub fn push_dictionary(&mut self) {
         self.dictionary.push(BTreeMap::new());
@@ -171,15 +175,19 @@ impl<'a> Env<'a> {
         }
     }
 
-    pub fn set_published_message_callback(&mut self,
-                                          callback: Box<messaging::PublishedMessageCallback + Send>) {
+    pub fn set_published_message_callback(
+        &mut self,
+        callback: Box<dyn messaging::PublishedMessageCallback + Send>,
+    ) {
         self.published_message_callback = Some(callback);
     }
 
-    pub fn published_message_callback(&self) -> Option<Box<messaging::PublishedMessageCallback + Send>> {
+    pub fn published_message_callback(
+        &self,
+    ) -> Option<Box<dyn messaging::PublishedMessageCallback + Send>> {
         match self.published_message_callback {
             None => None,
-            Some(ref cb) => Some(cb.cloned())
+            Some(ref cb) => Some(cb.cloned()),
         }
     }
 }

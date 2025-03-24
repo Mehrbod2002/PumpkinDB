@@ -25,8 +25,9 @@ instruction!(HASH_SHA512_256, b"\x8FHASH/SHA512-256");
 // `Sha512Trunc256`, which is the 64-bit `Sha512` algorithm with the result truncated to 256 bits.
 //
 
-use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, offset_by_size,
-            TryInstruction};
+use super::{
+    offset_by_size, Dispatcher, Env, EnvId, Error, PassResult, TryInstruction, ERROR_EMPTY_STACK,
+};
 use crypto::digest::Digest;
 use crypto::sha1::Sha1;
 use crypto::sha2::*;
@@ -39,36 +40,43 @@ pub struct Handler<'a> {
 
 macro_rules! hash_instruction {
     ($name : ident, $constant: ident, $i: ident, $size: expr) => {
-    #[inline]
-    pub fn $name(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        return_unless_instructions_equal!(instruction, $constant);
-        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
-        let mut hasher = $i::new();
-        hasher.input(a);
-        let mut slice = alloc_slice!($size, env);
-        hasher.result(&mut slice);
-        env.push(slice);
-        Ok(())
-    }
+        #[inline]
+        pub fn $name(
+            &mut self,
+            env: &mut Env<'a>,
+            instruction: &'a [u8],
+            _: EnvId,
+        ) -> PassResult<'a> {
+            return_unless_instructions_equal!(instruction, $constant);
+            let a = env.pop().ok_or_else(|| error_empty_stack!())?;
+            let mut hasher = $i::new();
+            hasher.input(a);
+            let mut slice = alloc_slice!($size, env);
+            hasher.result(&mut slice);
+            env.push(slice);
+            Ok(())
+        }
     };
 }
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
         self.handle_hash_sha1(env, instruction, pid)
-        .if_unhandled_try(|| self.handle_hash_sha224(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_hash_sha256(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_hash_sha384(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_hash_sha512(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_hash_sha512_224(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_hash_sha512_256(env, instruction, pid))
-        .if_unhandled_try(|| Err(Error::UnknownInstruction))
+            .if_unhandled_try(|| self.handle_hash_sha224(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_hash_sha256(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_hash_sha384(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_hash_sha512(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_hash_sha512_224(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_hash_sha512_256(env, instruction, pid))
+            .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
 
 impl<'a> Handler<'a> {
     pub fn new() -> Self {
-        Handler { phantom: PhantomData }
+        Handler {
+            phantom: PhantomData,
+        }
     }
 
     hash_instruction!(handle_hash_sha1, HASH_SHA1, Sha1, 20);

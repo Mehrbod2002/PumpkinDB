@@ -59,28 +59,26 @@
 //!   from carrying these references outside of the scope of the transaction)
 //!
 
-pub mod envheap;
 pub mod dispatcher;
+pub mod envheap;
 pub use self::dispatcher::Dispatcher;
 
 use super::messaging;
 
-const _EMPTY: &'static [u8] = b"";
-  
+const _EMPTY: &[u8] = b"";
+
 /// `instruction!` macro is used to define a built-in instruction, its signature (if applicable)
 /// and representation
 macro_rules! instruction {
     ($name : ident,
     ($($input : ident),* => $($output : ident),*),
-    $ident : expr) =>
-    (
-     instruction!($name, $ident);
-    );
+    $ident : expr) => {
+        instruction!($name, $ident);
+    };
     ($name : ident,
-    $ident : expr) =>
-    (
-     pub(crate) const $name : &'static[u8] = $ident;
-    )
+    $ident : expr) => {
+        pub(crate) const $name: &'static [u8] = $ident;
+    };
 }
 
 instruction!(TRY, b"\x83TRY");
@@ -89,13 +87,18 @@ instruction!(TRY_END, b"\x80\x83TRY"); // internal instruction
 include!("macros.rs");
 
 pub trait TryInstruction {
-    fn if_unhandled_try<F>(self, f: F) -> Result<(), Error> where F: FnOnce() -> Result<(), Error>;
+    fn if_unhandled_try<F>(self, f: F) -> Result<(), Error>
+    where
+        F: FnOnce() -> Result<(), Error>;
     fn is_unhandled(&self) -> bool;
 }
 
 impl TryInstruction for Result<(), Error> {
     #[inline]
-    fn if_unhandled_try<F>(self, f: F) -> Result<(), Error> where F: FnOnce() -> Result<(), Error> {
+    fn if_unhandled_try<F>(self, f: F) -> Result<(), Error>
+    where
+        F: FnOnce() -> Result<(), Error>,
+    {
         if self.is_unhandled() {
             f()
         } else {
@@ -153,23 +156,28 @@ use pumpkinscript;
 #[inline]
 pub fn offset_by_size(size: usize) -> usize {
     match size {
-        0...120 => 1,
-        120...255 => 2,
-        255...65535 => 3,
-        65536...4294967296 => 5,
+        0..=120 => 1,
+        121..=255 => 2,
+        256..=65535 => 3,
+        65536..=4294967296 => 5,
         _ => unreachable!(),
     }
 }
 
-use std::sync::mpsc;
 use snowflake::ProcessUniqueId;
 use std;
+use std::sync::mpsc;
 
 pub type EnvId = ProcessUniqueId;
 
 pub trait SchedulerHandle {
-    fn schedule_env(&self, env_id: EnvId, program: Vec<u8>, response_sender: Sender<ResponseMessage>,
-                    published_message_callback: Box<messaging::PublishedMessageCallback + Send>);
+    fn schedule_env(
+        &self,
+        env_id: EnvId,
+        program: Vec<u8>,
+        response_sender: Sender<ResponseMessage>,
+        published_message_callback: Box<dyn messaging::PublishedMessageCallback + Send>,
+    );
     fn shutdown(&self);
 }
 
@@ -177,9 +185,19 @@ pub type Sender<T> = mpsc::Sender<T>;
 pub type Receiver<T> = mpsc::Receiver<T>;
 
 impl SchedulerHandle for Sender<RequestMessage> {
-    fn schedule_env(&self, env_id: EnvId, program: Vec<u8>, response_sender: Sender<ResponseMessage>,
-                    published_message_callback: Box<messaging::PublishedMessageCallback + Send>) {
-        let _ = self.send(RequestMessage::ScheduleEnv(env_id, program, response_sender, published_message_callback));
+    fn schedule_env(
+        &self,
+        env_id: EnvId,
+        program: Vec<u8>,
+        response_sender: Sender<ResponseMessage>,
+        published_message_callback: Box<dyn messaging::PublishedMessageCallback + Send>,
+    ) {
+        let _ = self.send(RequestMessage::ScheduleEnv(
+            env_id,
+            program,
+            response_sender,
+            published_message_callback,
+        ));
     }
 
     fn shutdown(&self) {
@@ -189,13 +207,21 @@ impl SchedulerHandle for Sender<RequestMessage> {
 
 use rand::{thread_rng, Rng};
 
-impl<T : SchedulerHandle> SchedulerHandle for Vec<T> {
-    fn schedule_env(&self, env_id: EnvId, program: Vec<u8>, response_sender: Sender<ResponseMessage>, published_message_callback: Box<messaging::PublishedMessageCallback + Send>) {
+impl<T: SchedulerHandle> SchedulerHandle for Vec<T> {
+    fn schedule_env(
+        &self,
+        env_id: EnvId,
+        program: Vec<u8>,
+        response_sender: Sender<ResponseMessage>,
+        published_message_callback: Box<dyn messaging::PublishedMessageCallback + Send>,
+    ) {
         let mut rng = thread_rng();
         let index: usize = rng.gen_range(0, self.len() - 1);
         match self.get(index) {
             None => panic!("no available schedulers"),
-            Some(scheduler) => scheduler.schedule_env(env_id, program, response_sender, published_message_callback)
+            Some(scheduler) => {
+                scheduler.schedule_env(env_id, program, response_sender, published_message_callback)
+            }
         }
     }
 
@@ -210,8 +236,12 @@ impl<T : SchedulerHandle> SchedulerHandle for Vec<T> {
 pub enum RequestMessage {
     /// Requests scheduling a new environment with a given
     /// id and a program.
-    ScheduleEnv(EnvId, Vec<u8>, Sender<ResponseMessage>,
-                Box<messaging::PublishedMessageCallback + Send>),
+    ScheduleEnv(
+        EnvId,
+        Vec<u8>,
+        Sender<ResponseMessage>,
+        Box<dyn messaging::PublishedMessageCallback + Send>,
+    ),
     /// Requests Scheduler shutdown
     Shutdown,
 }
@@ -229,33 +259,33 @@ pub enum ResponseMessage {
 
 pub type TrySendError<T> = std::sync::mpsc::TrySendError<T>;
 
-use storage;
-use timestamp;
+use crate::storage;
+use crate::timestamp;
 
-#[cfg(feature="mod_core")]
-pub mod mod_core;
-#[cfg(feature="mod_stack")]
-pub mod mod_stack;
-#[cfg(feature="mod_queue")]
-pub mod mod_queue;
-#[cfg(feature="mod_numbers")]
-pub mod mod_numbers;
-#[cfg(feature="mod_binaries")]
+#[cfg(feature = "mod_binaries")]
 pub mod mod_binaries;
-#[cfg(feature="mod_storage")]
-pub mod mod_storage;
-#[cfg(feature="mod_hlc")]
-pub mod mod_hlc;
-#[cfg(feature="mod_hash")]
+#[cfg(feature = "mod_core")]
+pub mod mod_core;
+#[cfg(feature = "mod_hash")]
 pub mod mod_hash;
-#[cfg(feature="mod_json")]
+#[cfg(feature = "mod_hlc")]
+pub mod mod_hlc;
+#[cfg(feature = "mod_json")]
 pub mod mod_json;
-#[cfg(feature="mod_msg")]
+#[cfg(feature = "mod_msg")]
 pub mod mod_msg;
-#[cfg(feature="mod_uuid")]
-pub mod mod_uuid;
-#[cfg(feature="mod_string")]
+#[cfg(feature = "mod_numbers")]
+pub mod mod_numbers;
+#[cfg(feature = "mod_queue")]
+pub mod mod_queue;
+#[cfg(feature = "mod_stack")]
+pub mod mod_stack;
+#[cfg(feature = "mod_storage")]
+pub mod mod_storage;
+#[cfg(feature = "mod_string")]
 pub mod mod_string;
+#[cfg(feature = "mod_uuid")]
+pub mod mod_uuid;
 
 /// Scheduler is a PumpkinScript scheduler and interpreter. This is the
 /// most central part of this module.
@@ -286,47 +316,49 @@ pub mod mod_string;
 ///     }
 /// }
 /// ```
-
 use std::collections::VecDeque;
 
 use std::marker::PhantomData;
 
-pub struct Scheduler<'a, T : Dispatcher<'a>> {
+pub struct Scheduler<'a, T: Dispatcher<'a>> {
     inbox: Receiver<RequestMessage>,
     dispatcher: T,
     phantom: PhantomData<&'a ()>,
 }
 
-unsafe impl<'a, T : Dispatcher<'a>> Send for Scheduler<'a, T> {}
+unsafe impl<'a, T: Dispatcher<'a>> Send for Scheduler<'a, T> {}
 
 pub type PassResult<'a> = Result<(), Error>;
 
-pub const STACK_TRUE: &'static [u8] = b"\x01";
-pub const STACK_FALSE: &'static [u8] = b"\x00";
+pub const STACK_TRUE: &[u8] = b"\x01";
+pub const STACK_FALSE: &[u8] = b"\x00";
 
-pub const ERROR_UNKNOWN_INSTRUCTION: &'static [u8] = b"\x01\x02";
-pub const ERROR_INVALID_VALUE: &'static [u8] = b"\x01\x03";
-pub const ERROR_EMPTY_STACK: &'static [u8] = b"\x01\x04";
-pub const ERROR_DECODING: &'static [u8] = b"\x01\x05";
-pub const ERROR_DUPLICATE_KEY: &'static [u8] = b"\x01\x06";
-pub const ERROR_UNKNOWN_KEY: &'static [u8] = b"\x01\x07";
-pub const ERROR_NO_TX: &'static [u8] = b"\x01\x08";
-pub const ERROR_DATABASE: &'static [u8] = b"\x01\x09";
-pub const ERROR_NO_VALUE: &'static [u8] = b"\x01\x0A";
+pub const ERROR_UNKNOWN_INSTRUCTION: &[u8] = b"\x01\x02";
+pub const ERROR_INVALID_VALUE: &[u8] = b"\x01\x03";
+pub const ERROR_EMPTY_STACK: &[u8] = b"\x01\x04";
+pub const ERROR_DECODING: &[u8] = b"\x01\x05";
+pub const ERROR_DUPLICATE_KEY: &[u8] = b"\x01\x06";
+pub const ERROR_UNKNOWN_KEY: &[u8] = b"\x01\x07";
+pub const ERROR_NO_TX: &[u8] = b"\x01\x08";
+pub const ERROR_DATABASE: &[u8] = b"\x01\x09";
+pub const ERROR_NO_VALUE: &[u8] = b"\x01\x0A";
 
 use std::sync::Arc;
 
-use pumpkinscript::{binparser};
+use pumpkinscript::binparser;
 
 impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
     /// Creates an instance of Scheduler and a Sender
     pub fn new(dispatcher: T) -> (Self, Sender<RequestMessage>) {
         let (tx, rx) = mpsc::channel::<RequestMessage>();
-        (Scheduler::<'a, T> {
-            inbox: rx,
-            dispatcher: dispatcher,
-            phantom: PhantomData,
-        }, tx)
+        (
+            Scheduler::<'a, T> {
+                inbox: rx,
+                dispatcher,
+                phantom: PhantomData,
+            },
+            tx,
+        )
     }
 
     /// Scheduler. It is supposed to be running in a separate thread
@@ -359,20 +391,25 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
                         Err(err) => {
                             self.dispatcher.done(env, pid);
                             let stack_size = env.stack().len();
-                            let _ = chan.send(ResponseMessage::EnvFailed(pid,
-                                                                         err,
-                                                                         Some(env.stack_copy()),
-                                                                         Some(stack_size)));
+                            let _ = chan.send(ResponseMessage::EnvFailed(
+                                pid,
+                                err,
+                                Some(env.stack_copy()),
+                                Some(stack_size),
+                            ));
                             pop_front = true;
                         }
                         Ok(()) => {
-                            if env.program.is_empty() ||
-                                (env.program.len() == 1 && env.program[0].len() == 0) {
+                            if env.program.is_empty()
+                                || (env.program.len() == 1 && env.program[0].len() == 0)
+                            {
                                 self.dispatcher.done(env, pid);
                                 let stack_size = env.stack().len();
-                                let _ = chan.send(ResponseMessage::EnvTerminated(pid,
-                                                                                 env.stack_copy(),
-                                                                                 stack_size));
+                                let _ = chan.send(ResponseMessage::EnvTerminated(
+                                    pid,
+                                    env.stack_copy(),
+                                    stack_size,
+                                ));
                                 pop_front = true;
                             }
                         }
@@ -407,29 +444,26 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
             match message {
                 Err(err) => panic!("error receiving: {:?}", err),
                 Ok(RequestMessage::Shutdown) => break,
-                Ok(RequestMessage::ScheduleEnv(pid, program, chan, cb)) => {
-                    match Env::new() {
-                        Ok(mut env) => {
-                            env.set_published_message_callback(cb);
-                            match env.alloc(program.len()) {
-                                Ok(slice) => {
-                                    slice.copy_from_slice(program.as_slice());
-                                    env.program.push(slice);
-                                    self.dispatcher.init(&mut env, pid);
-                                    envs.push_back((pid, env, chan));
-                                    len += 1;
-                                }
-                                Err(err) => {
-                                    let _ =
-                                        chan.send(ResponseMessage::EnvFailed(pid, err, None, None));
-                                }
+                Ok(RequestMessage::ScheduleEnv(pid, program, chan, cb)) => match Env::new() {
+                    Ok(mut env) => {
+                        env.set_published_message_callback(cb);
+                        match env.alloc(program.len()) {
+                            Ok(slice) => {
+                                slice.copy_from_slice(program.as_slice());
+                                env.program.push(slice);
+                                self.dispatcher.init(&mut env, pid);
+                                envs.push_back((pid, env, chan));
+                                len += 1;
+                            }
+                            Err(err) => {
+                                let _ = chan.send(ResponseMessage::EnvFailed(pid, err, None, None));
                             }
                         }
-                        Err(err) => {
-                            let _ = chan.send(ResponseMessage::EnvFailed(pid, err, None, None));
-                        }
                     }
-                }
+                    Err(err) => {
+                        let _ = chan.send(ResponseMessage::EnvFailed(pid, err, None, None));
+                    }
+                },
             }
         }
     }
@@ -452,34 +486,41 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
             }
             Ok(())
         } else if let pumpkinscript::ParseResult::Done(rest, instruction) =
-        binparser::instruction_or_internal_instruction(program) {
+            binparser::instruction_or_internal_instruction(program)
+        {
             if rest.len() > 0 {
                 env.program.push(rest);
             }
-            if instruction != TRY_END && !env.aborting_try.is_empty() {
+            let instruction_owned = instruction.clone();
+
+            if rest.len() > 0 {
+                env.program.push(rest);
+            }
+            if &[instruction_owned] != TRY_END && !env.aborting_try.is_empty() {
                 return Ok(());
             }
 
-            match self.handle(env, instruction, pid) {
+            match self.handle(env, std::slice::from_ref(&instruction_owned), pid) {
                 Ok(()) => Ok(()),
-                Err(Error::UnknownInstruction) => handle_error!(env, error_unknown_instruction!(instruction)),
+                Err(Error::UnknownInstruction) => {
+                    handle_error!(env, error_unknown_instruction!(&[instruction_owned]))
+                }
                 Err(err @ Error::ProgramError(_)) => handle_error!(env, err),
                 Err(err) => Err(err),
-            }
-
+            }     
         } else {
             handle_error!(env, error_decoding!())
         }
     }
 
-
     #[inline]
     #[cfg(not(feature = "scoped_dictionary"))]
-    fn handle_dictionary(&mut self,
-                         env: &mut Env<'a>,
-                         instruction: &'a [u8],
-                         _: EnvId)
-                         -> PassResult<'a> {
+    fn handle_dictionary(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         if env.dictionary.contains_key(instruction) {
             {
                 let def = env.dictionary.get(instruction).unwrap();
@@ -493,11 +534,12 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
 
     #[inline]
     #[cfg(feature = "scoped_dictionary")]
-    fn handle_dictionary(&mut self,
-                         env: &mut Env<'a>,
-                         instruction: &'a [u8],
-                         _: EnvId)
-                         -> PassResult<'a> {
+    fn handle_dictionary(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         let mut found = false;
 
         for i in (0..env.dictionary.len()).rev() {
@@ -527,11 +569,12 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
     }
 
     #[inline]
-    fn handle_try_end(&mut self,
-                      env: &mut Env<'a>,
-                      instruction: &'a [u8],
-                      pid: EnvId)
-                      -> PassResult<'a> {
+    fn handle_try_end(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        pid: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, TRY_END);
         env.tracking_errors -= 1;
         if env.aborting_try.is_empty() {
@@ -559,31 +602,32 @@ impl<'a, T: Dispatcher<'a>> Dispatcher<'a> for Scheduler<'a, T> {
     }
 }
 
-
 #[cfg(test)]
 #[allow(unused_variables, unused_must_use, unused_mut)]
 mod tests {
 
-    use pumpkinscript::{parse, offset_by_size};
-    use messaging;
-    use nvmem::{MmapedFile};
-    use script::{Env, Scheduler, Error, ResponseMessage, EnvId, dispatcher};
+    use super::binparser;
+    use crate::messaging;
+    use crate::nvmem::MmapedFile;
+    use crate::script::{dispatcher, Env, EnvId, Error, ResponseMessage, Scheduler};
+    use crate::storage;
+    use crate::timestamp;
+    use criterion::{criterion_group, criterion_main, Criterion};
+    use crossbeam;
+    use lmdb;
+    use pumpkinscript::{offset_by_size, parse};
+    use std::fs;
     use std::sync::mpsc;
     use std::sync::Arc;
-    use timestamp;
-    use std::fs;
     use tempdir::TempDir;
-    use lmdb;
-    use crossbeam;
-    use super::binparser;
-    use storage;
 
-    const _EMPTY: &'static [u8] = b"";
+    const _EMPTY: &[u8] = b"";
 
     #[test]
     fn error_macro() {
         if let Error::ProgramError(err) =
-            error_program!("Test".as_bytes(), "123".as_bytes(), b"\x01\x33") {
+            error_program!("Test".as_bytes(), "123".as_bytes(), b"\x01\x33")
+        {
             assert_eq!(err, parsed_data!("[\"Test\" [\"123\"] 0x33]"));
         } else {
             assert!(false);
@@ -593,9 +637,42 @@ mod tests {
     #[test]
     fn unknown_instruction() {
         eval!("NOTANINSTRUCTION", env, result, {
-            assert_error!(result,
-                          "[\"Unknown instruction: NOTANINSTRUCTION\" ['NOTANINSTRUCTION] 2]");
+            assert_error!(
+                result,
+                "[\"Unknown instruction: NOTANINSTRUCTION\" ['NOTANINSTRUCTION] 2]"
+            );
         });
+    }
+
+    #[test]
+    fn test_constants() {
+        use super::binparser;
+        use pumpkinscript::ParseResult;
+
+        fn get_constant(name: &str) -> Option<Vec<u8>> {
+            match name {
+                "FIXATTRLEN" => Some(vec![20]),
+                "MYTEST" => Some(vec![21]),
+                _ => None,
+            }
+        }
+
+        let input_fixattrlen = b"$FIXATTRLEN";
+        let input_mytest = b"$MYTEST";
+
+        match binparser::instruction_or_internal_instruction(input_fixattrlen) {
+            ParseResult::Done(_, value) => {
+                assert_eq!(value, 20, "Expected 20 for $FIXATTRLEN");
+            }
+            _ => panic!("Failed to parse $FIXATTRLEN"),
+        }
+
+        match binparser::instruction_or_internal_instruction(input_mytest) {
+            ParseResult::Done(_, value) => {
+                assert_eq!(value, 21, "Expected 21 for $MYTEST");
+            }
+            _ => panic!("Failed to parse $MYTEST"),
+        }
     }
 
     #[test]
@@ -606,7 +683,7 @@ mod tests {
     }
 
     #[test]
-    fn try() {
+    fn r#try() {
         eval!("[1 DUP] TRY", env, result, {
             assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[]"));
             assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
@@ -616,24 +693,34 @@ mod tests {
 
         eval!("[DUP] TRY", env, result, {
             assert!(!result.is_err());
-            assert_eq!(Vec::from(env.pop().unwrap()),
-                       parsed_data!("[\"Empty stack\" [] 4]"));
+            assert_eq!(
+                Vec::from(env.pop().unwrap()),
+                parsed_data!("[\"Empty stack\" [] 4]")
+            );
             assert_eq!(env.pop(), None);
         });
 
         eval!("[NOTANINSTRUCTION] TRY", env, result, {
-            assert_eq!(Vec::from(env.pop().unwrap()),
-                       parsed_data!("[\"Unknown instruction: NOTANINSTRUCTION\" \
-                                     ['NOTANINSTRUCTION] 2]"));
+            assert_eq!(
+                Vec::from(env.pop().unwrap()),
+                parsed_data!(
+                    "[\"Unknown instruction: NOTANINSTRUCTION\" \
+                                     ['NOTANINSTRUCTION] 2]"
+                )
+            );
             assert_eq!(env.pop(), None);
         });
 
         eval!("[[DUP] TRY 0x20 NOT] TRY", env, result, {
             assert!(!result.is_err());
-            assert_eq!(Vec::from(env.pop().unwrap()),
-                       parsed_data!("[\"Invalid value\" [0x20] 3]"));
-            assert_eq!(Vec::from(env.pop().unwrap()),
-                       parsed_data!("[\"Empty stack\" [] 4]"));
+            assert_eq!(
+                Vec::from(env.pop().unwrap()),
+                parsed_data!("[\"Invalid value\" [0x20] 3]")
+            );
+            assert_eq!(
+                Vec::from(env.pop().unwrap()),
+                parsed_data!("[\"Empty stack\" [] 4]")
+            );
             assert_eq!(env.pop(), None);
         });
 
@@ -646,33 +733,45 @@ mod tests {
         });
 
         eval!("1 TRY", env, result, {
-            assert_eq!(Vec::from(env.pop().unwrap()),
-                       parsed_data!("[\"Decoding error\" [] 5]"));
+            assert_eq!(
+                Vec::from(env.pop().unwrap()),
+                parsed_data!("[\"Decoding error\" [] 5]")
+            );
             assert_eq!(env.pop(), None);
         });
-
     }
 
-    use test::Bencher;
-
-    #[bench]
-    fn ackermann(b: &mut Bencher) {
-        // HT @5HT
-        bench_eval!("['n SET 'm SET m 0 EQUAL? [n 1 UINT/ADD] \
-        [n 0 EQUAL? [m 1 UINT/SUB 1 ack] [m 1 UINT/SUB m n 1 UINT/SUB ack ack] IFELSE] IFELSE] \
-        'ack DEF \
-        3 4 ack",
-                    b);
+    #[allow(dead_code)]
+    fn ackermann(c: &mut Criterion) {
+        c.bench_function("ackermann", |b| {
+            b.iter(|| {
+                // HT @5HT
+                bench_eval!(
+                    "['n SET 'm SET m 0 EQUAL? [n 1 UINT/ADD] \
+                [n 0 EQUAL? [m 1 UINT/SUB 1 ack] [m 1 UINT/SUB m n 1 UINT/SUB ack ack] IFELSE] IFELSE] \
+                'ack DEF \
+                3 4 ack",
+                    black_box(&mut ())
+                );
+            })
+        });
     }
 
-    #[bench]
-    fn ackermann_stack(b: &mut Bencher) {
-        // HT @5HT
-        bench_eval!("[OVER 0 EQUAL? [1 UINT/ADD NIP] \
-        [DUP 0 EQUAL? [DROP 1 UINT/SUB 1 ack] [OVER 1 UINT/SUB -ROT 1 UINT/SUB ack ack] IFELSE] IFELSE] \
-        'ack DEF \
-        3 4 ack",
-                    b);
+    #[allow(dead_code)]
+    fn ackermann_stack(c: &mut Criterion) {
+        c.bench_function("ackermann_stack", |b| {
+            b.iter(|| {
+                // HT @5HT
+                bench_eval!("[OVER 0 EQUAL? [1 UINT/ADD NIP] \
+                [DUP 0 EQUAL? [DROP 1 UINT/SUB 1 ack] [OVER 1 UINT/SUB -ROT 1 UINT/SUB ack ack] IFELSE] IFELSE] \
+                'ack DEF \
+                3 4 ack",
+                            black_box(&mut ())
+                );
+            })
+        });
     }
 
+    criterion_group!(benches, ackermann, ackermann_stack);
+    criterion_main!(benches);
 }

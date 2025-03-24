@@ -17,14 +17,14 @@ pub trait Dispatcher<'a> {
 
 include!("macros.rs");
 
-impl<'a> Dispatcher<'a> for Vec<Box<Dispatcher<'a>>> {
+impl<'a> Dispatcher<'a> for Vec<Box<dyn Dispatcher<'a>>> {
     fn init(&mut self, env: &mut Env<'a>, pid: EnvId) {
-        for mut disp in self.into_iter() {
+        for disp in self.into_iter() {
             disp.init(env, pid);
         }
     }
     fn done(&mut self, env: &mut Env<'a>, pid: EnvId) {
-        for mut disp in self.into_iter() {
+        for disp in self.into_iter() {
             disp.done(env, pid);
         }
     }
@@ -33,10 +33,10 @@ impl<'a> Dispatcher<'a> for Vec<Box<Dispatcher<'a>>> {
         loop {
             match iter.next() {
                 None => break,
-                Some(mut disp) => {
+                Some(disp) => {
                     let result = disp.handle(env, instruction, pid);
                     if result.is_unhandled() {
-                        continue
+                        continue;
                     }
                     return result;
                 }
@@ -48,62 +48,62 @@ impl<'a> Dispatcher<'a> for Vec<Box<Dispatcher<'a>>> {
 
 macro_rules! for_each_dispatcher {
     ($module: ident, $dispatcher : expr, $expr: expr) => {{
-        #[cfg(feature="mod_core")]
+        #[cfg(feature = "mod_core")]
         {
-           let ref mut $module = $dispatcher.core;
-           $expr
+            let ref mut $module = $dispatcher.core;
+            $expr
         }
-        #[cfg(feature="mod_stack")]
+        #[cfg(feature = "mod_stack")]
         {
-           let ref mut $module = $dispatcher.stack;
-           $expr
+            let ref mut $module = $dispatcher.stack;
+            $expr
         }
-        #[cfg(feature="mod_queue")]
+        #[cfg(feature = "mod_queue")]
         {
-           let ref mut $module = $dispatcher.queue;
-           $expr
+            let ref mut $module = $dispatcher.queue;
+            $expr
         }
-        #[cfg(feature="mod_binaries")]
+        #[cfg(feature = "mod_binaries")]
         {
-           let ref mut $module = $dispatcher.binaries;
-           $expr
+            let ref mut $module = $dispatcher.binaries;
+            $expr
         }
-        #[cfg(feature="mod_numbers")]
+        #[cfg(feature = "mod_numbers")]
         {
-           let ref mut $module = $dispatcher.numbers;
-           $expr
+            let ref mut $module = $dispatcher.numbers;
+            $expr
         }
-        #[cfg(feature="mod_storage")]
+        #[cfg(feature = "mod_storage")]
         {
-           let ref mut $module = $dispatcher.storage;
-           $expr
+            let ref mut $module = $dispatcher.storage;
+            $expr
         }
-        #[cfg(feature="mod_hash")]
+        #[cfg(feature = "mod_hash")]
         {
-           let ref mut $module = $dispatcher.hash;
-           $expr
+            let ref mut $module = $dispatcher.hash;
+            $expr
         }
-        #[cfg(feature="mod_hlc")]
+        #[cfg(feature = "mod_hlc")]
         {
-           let ref mut $module = $dispatcher.hlc;
-           $expr
+            let ref mut $module = $dispatcher.hlc;
+            $expr
         }
-        #[cfg(feature="mod_json")]
+        #[cfg(feature = "mod_json")]
         {
-           let ref mut $module = $dispatcher.json;
-           $expr
+            let ref mut $module = $dispatcher.json;
+            $expr
         }
-        #[cfg(feature="mod_msg")]
+        #[cfg(feature = "mod_msg")]
         {
-           let ref mut $module = $dispatcher.msg;
-           $expr
+            let ref mut $module = $dispatcher.msg;
+            $expr
         }
-        #[cfg(feature="mod_uuid")]
+        #[cfg(feature = "mod_uuid")]
         {
             let ref mut $module = $dispatcher.uuid;
             $expr
         }
-        #[cfg(feature="mod_string")]
+        #[cfg(feature = "mod_string")]
         {
             let ref mut $module = $dispatcher.string;
             $expr
@@ -114,8 +114,11 @@ macro_rules! for_each_dispatcher {
 use super::super::nvmem::NonVolatileMemory;
 
 pub struct StandardDispatcher<'a, P: 'a, S: 'a, N: 'a, T>
-    where P : messaging::Publisher, S : messaging::Subscriber,
-          N : NonVolatileMemory, T : AsRef<storage::Storage<'a>> + 'a
+where
+    P: messaging::Publisher,
+    S: messaging::Subscriber,
+    N: NonVolatileMemory,
+    T: AsRef<storage::Storage<'a>> + 'a,
 {
     #[cfg(feature = "mod_core")]
     core: mod_core::Handler<'a>,
@@ -140,50 +143,58 @@ pub struct StandardDispatcher<'a, P: 'a, S: 'a, N: 'a, T>
     #[cfg(feature = "mod_uuid")]
     uuid: mod_uuid::Handler<'a>,
     #[cfg(feature = "mod_string")]
-    string: mod_string::Handler<'a>
+    string: mod_string::Handler<'a>,
 }
 
-
 impl<'a, P: 'a, S: 'a, N: 'a, T> StandardDispatcher<'a, P, S, N, T>
-    where P : messaging::Publisher, S : messaging::Subscriber,
-          N : NonVolatileMemory, T : AsRef<storage::Storage<'a>> + 'a {
-
-    pub fn new(db: T,
-               publisher: P, subscriber: S,
-               timestamp_state: Arc<timestamp::Timestamp<N>>)
-               -> Self {
+where
+    P: messaging::Publisher,
+    S: messaging::Subscriber,
+    N: NonVolatileMemory,
+    T: AsRef<storage::Storage<'a>> + 'a,
+{
+    pub fn new(
+        db: T,
+        publisher: P,
+        subscriber: S,
+        timestamp_state: Arc<timestamp::Timestamp<N>>,
+    ) -> Self {
         StandardDispatcher {
-                #[cfg(feature = "mod_core")]
-                    core: mod_core::Handler::new(),
-                #[cfg(feature = "mod_stack")]
-                    stack: mod_stack::Handler::new(),
-               #[cfg(feature = "mod_stack")]
-                    queue: mod_queue::Handler::new(),
-                #[cfg(feature = "mod_binaries")]
-                    binaries: mod_binaries::Handler::new(),
-                #[cfg(feature = "mod_numbers")]
-                    numbers: mod_numbers::Handler::new(),
-                #[cfg(feature = "mod_storage")]
-                    storage: mod_storage::Handler::new(db, timestamp_state.clone()),
-                #[cfg(feature = "mod_hash")]
-                    hash: mod_hash::Handler::new(),
-                #[cfg(feature = "mod_hlc")]
-                    hlc: mod_hlc::Handler::new(timestamp_state),
-                #[cfg(feature = "mod_json")]
-                    json: mod_json::Handler::new(),
-                #[cfg(feature = "mod_msg")]
-                    msg: mod_msg::Handler::new(publisher, subscriber),
-                #[cfg(feature = "mod_uuid")]
-                    uuid: mod_uuid::Handler::new(),
-                #[cfg(feature = "mod_string")]
-                    string: mod_string::Handler::new(),
+            #[cfg(feature = "mod_core")]
+            core: mod_core::Handler::new(),
+            #[cfg(feature = "mod_stack")]
+            stack: mod_stack::Handler::new(),
+            #[cfg(feature = "mod_stack")]
+            queue: mod_queue::Handler::new(),
+            #[cfg(feature = "mod_binaries")]
+            binaries: mod_binaries::Handler::new(),
+            #[cfg(feature = "mod_numbers")]
+            numbers: mod_numbers::Handler::new(),
+            #[cfg(feature = "mod_storage")]
+            storage: mod_storage::Handler::new(db, timestamp_state.clone()),
+            #[cfg(feature = "mod_hash")]
+            hash: mod_hash::Handler::new(),
+            #[cfg(feature = "mod_hlc")]
+            hlc: mod_hlc::Handler::new(timestamp_state),
+            #[cfg(feature = "mod_json")]
+            json: mod_json::Handler::new(),
+            #[cfg(feature = "mod_msg")]
+            msg: mod_msg::Handler::new(publisher, subscriber),
+            #[cfg(feature = "mod_uuid")]
+            uuid: mod_uuid::Handler::new(),
+            #[cfg(feature = "mod_string")]
+            string: mod_string::Handler::new(),
         }
     }
 }
 
 impl<'a, P: 'a, S: 'a, N: 'a, T> Dispatcher<'a> for StandardDispatcher<'a, P, S, N, T>
-    where P : messaging::Publisher, S : messaging::Subscriber, N : NonVolatileMemory,
-          T : AsRef<storage::Storage<'a>> + 'a {
+where
+    P: messaging::Publisher,
+    S: messaging::Subscriber,
+    N: NonVolatileMemory,
+    T: AsRef<storage::Storage<'a>> + 'a,
+{
     fn init(&mut self, env: &mut Env<'a>, pid: EnvId) {
         for_each_dispatcher!(disp, self, disp.init(env, pid));
     }
@@ -192,10 +203,10 @@ impl<'a, P: 'a, S: 'a, N: 'a, T> Dispatcher<'a> for StandardDispatcher<'a, P, S,
     }
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
         for_each_dispatcher!(disp, self, {
-           let result = disp.handle(env, instruction, pid);
-           if !result.is_unhandled() {
-              return result;
-           }
+            let result = disp.handle(env, instruction, pid);
+            if !result.is_unhandled() {
+                return result;
+            }
         });
         Err(Error::UnknownInstruction)
     }
@@ -205,75 +216,84 @@ impl<'a, P: 'a, S: 'a, N: 'a, T> Dispatcher<'a> for StandardDispatcher<'a, P, S,
 #[allow(unused_variables, unused_must_use, unused_mut)]
 mod tests {
 
-  use pumpkinscript::parse;
-  use script::{Env, EnvId, PassResult,
-               Scheduler, SchedulerHandle, Error, RequestMessage, ResponseMessage,
-               Dispatcher, TryInstruction};
-  use std::sync::mpsc;
-  use crossbeam;
+    use crate::script::{
+        Dispatcher, Env, EnvId, Error, PassResult, RequestMessage, ResponseMessage, Scheduler,
+        SchedulerHandle, TryInstruction,
+    };
+    use crossbeam;
+    use pumpkinscript::parse;
+    use std::sync::mpsc;
 
-  use std::marker::PhantomData;
+    use std::marker::PhantomData;
 
-  struct MyDispatcher<'a> {
-      phantom: PhantomData<&'a ()>,
-  }
+    struct MyDispatcher<'a> {
+        phantom: PhantomData<&'a ()>,
+    }
 
-  impl<'a> MyDispatcher<'a> {
+    impl<'a> MyDispatcher<'a> {
+        pub fn new() -> Self {
+            MyDispatcher {
+                phantom: PhantomData,
+            }
+        }
 
-      pub fn new() -> Self {
-          MyDispatcher{ phantom: PhantomData }
-      }
+        pub fn handle_test(
+            &mut self,
+            env: &mut Env<'a>,
+            instruction: &'a [u8],
+            _: EnvId,
+        ) -> PassResult<'a> {
+            return_unless_instructions_equal!(instruction, b"\x84TEST");
+            env.push(b"TEST");
+            Ok(())
+        }
+    }
 
-      pub fn handle_test(&mut self, env: &mut Env<'a>,
-                          instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-          return_unless_instructions_equal!(instruction, b"\x84TEST");
-          env.push(b"TEST");
-          Ok(())
-      }
+    impl<'a> Dispatcher<'a> for MyDispatcher<'a> {
+        fn handle(
+            &mut self,
+            env: &mut Env<'a>,
+            instruction: &'a [u8],
+            pid: EnvId,
+        ) -> PassResult<'a> {
+            self.handle_test(env, instruction, pid)
+                .if_unhandled_try(|| Err(Error::UnknownInstruction))
+        }
+    }
 
-  }
-
-  impl<'a> Dispatcher<'a> for MyDispatcher<'a> {
-     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
-         self.handle_test(env, instruction, pid)
-             .if_unhandled_try(|| Err(Error::UnknownInstruction))
-     }
-  }
-
-  #[test]
-  pub fn dynamic_dispatch() {
-      crossbeam::scope(|scope| {
-          let dispatchers: Vec<Box<Dispatcher>> = vec![Box::new(MyDispatcher::new())];
-          let (mut scheduler, sender) = Scheduler::new(dispatchers);
-          let handle = scope.spawn(move || scheduler.run() );
-          let sender_ = sender.clone();
-          let script = parse("TEST").unwrap();
-          let (callback, receiver) = mpsc::channel::<ResponseMessage>();
-          let (sender0, _) = mpsc::channel();
-          sender.schedule_env(EnvId::new(), script.clone(), callback, Box::new(sender0));
-          match receiver.recv() {
-              Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
-                  // terminated without an error
-                  let mut stack_ = Vec::with_capacity(stack.len());
-                  for i in 0..(&stack).len() {
-                      stack_.push((&stack[i]).as_slice());
-                  }
-                  let mut script_env = Env::new_with_stack(stack_).unwrap();
-                  let val = script_env.pop().unwrap();
-                  assert_eq!(val, b"TEST");
-              },
-              Ok(ResponseMessage::EnvFailed(_, err, stack, stack_size)) => {
-                  let _ = sender.send(RequestMessage::Shutdown);
-                  panic!("error: {:?}", err);
-              }
-              Err(err) => {
-                  let _ = sender.send(RequestMessage::Shutdown);
-                  panic!("recv error: {:?}", err);
-             }
-         }
-         sender_.shutdown();
-         let _ = handle.join();
-    });
-  }
-
+    #[test]
+    pub fn dynamic_dispatch() {
+        crossbeam::scope(|scope| {
+            let dispatchers: Vec<Box<dyn Dispatcher>> = vec![Box::new(MyDispatcher::new())];
+            let (mut scheduler, sender) = Scheduler::new(dispatchers);
+            let handle = scope.spawn(move || scheduler.run());
+            let sender_ = sender.clone();
+            let script = parse("TEST").unwrap();
+            let (callback, receiver) = mpsc::channel::<ResponseMessage>();
+            let (sender0, _) = mpsc::channel();
+            sender.schedule_env(EnvId::new(), script.clone(), callback, Box::new(sender0));
+            match receiver.recv() {
+                Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
+                    // terminated without an error
+                    let mut stack_ = Vec::with_capacity(stack.len());
+                    for i in 0..(&stack).len() {
+                        stack_.push((&stack[i]).as_slice());
+                    }
+                    let mut script_env = Env::new_with_stack(stack_).unwrap();
+                    let val = script_env.pop().unwrap();
+                    assert_eq!(val, b"TEST");
+                }
+                Ok(ResponseMessage::EnvFailed(_, err, stack, stack_size)) => {
+                    let _ = sender.send(RequestMessage::Shutdown);
+                    panic!("error: {:?}", err);
+                }
+                Err(err) => {
+                    let _ = sender.send(RequestMessage::Shutdown);
+                    panic!("recv error: {:?}", err);
+                }
+            }
+            sender_.shutdown();
+            let _ = handle.join();
+        });
+    }
 }

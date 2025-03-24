@@ -4,17 +4,19 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size, STACK_TRUE, STACK_FALSE, TryInstruction};
+use super::{
+    offset_by_size, Dispatcher, Env, EnvId, Error, PassResult, TryInstruction, ERROR_EMPTY_STACK,
+    ERROR_INVALID_VALUE, STACK_FALSE, STACK_TRUE,
+};
 
-use ::pumpkinscript::{Packable, Unpackable};
+use pumpkinscript::{Packable, Unpackable};
 
 use std::marker::PhantomData;
 
-use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use num_bigint::{BigUint, BigInt};
 use core::ops::{Add, Sub};
+use num_bigint::{BigInt, BigUint};
 
 // Category: arithmetics
 instruction!(UINT_ADD, (a, b => c), b"\x88UINT/ADD");
@@ -112,7 +114,6 @@ macro_rules! int_comparison {
     }};
 }
 
-
 macro_rules! no_endianness_sized_uint_op {
     ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
         let mut b = $env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -135,7 +136,7 @@ macro_rules! no_endianness_sized_uint_op {
 
         let mut c_bytes = vec![];
         match c_bytes.$write_op(c_int) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => return Err(error_invalid_value!(a)),
         }
 
@@ -173,10 +174,10 @@ macro_rules! no_endianness_sized_int_op {
 
         let mut c_bytes = vec![];
         match c_bytes.$write_op(c_int) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => return Err(error_invalid_value!(a)),
         }
-        
+
         c_bytes[0] ^= 1u8 << 7;
 
         let slice = alloc_and_write!(c_bytes.as_slice(), $env);
@@ -207,7 +208,7 @@ macro_rules! sized_uint_op {
 
         let mut c_bytes = vec![];
         match c_bytes.$write_op::<BigEndian>(c_int) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => return Err(error_invalid_value!(a)),
         }
 
@@ -245,7 +246,7 @@ macro_rules! sized_int_op {
 
         let mut c_bytes = vec![];
         match c_bytes.$write_op::<BigEndian>(c_int) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => return Err(error_invalid_value!(a)),
         }
 
@@ -261,11 +262,10 @@ macro_rules! to_string {
     ($env: expr, $type: ident) => {{
         let a_bytes = $env.pop().ok_or_else(|| error_empty_stack!())?;
         let a: $type = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
-        
-        format!("{}", a)
-    }}
-}
 
+        format!("{}", a)
+    }};
+}
 
 pub struct Handler<'a> {
     phantom: PhantomData<&'a ()>,
@@ -274,57 +274,58 @@ pub struct Handler<'a> {
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
         self.handle_uint_add(env, instruction, pid)
-        .if_unhandled_try(|| self.handle_uint_sub(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_int_add(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_int_sub(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_int_to_uint(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_uint_to_int(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_uint_equalq(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_uint_gtq(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_uint_ltq(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_int_equalq(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_int_gtq(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_int_ltq(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_uint8_add(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_uint8_sub(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_int8_add(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_int8_sub(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_uint16_add(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_uint16_sub(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_int16_add(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_int16_sub(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_uint32_add(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_uint32_sub(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_int32_add(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_int32_sub(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_uint64_add(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_uint64_sub(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_int64_add(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_int64_sub(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_f32_add(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_f32_sub(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_f64_add(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_f64_sub(env, instruction, pid))
-
-        .if_unhandled_try(|| self.handle_uint_to_string(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_int_to_string(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_to_string(env, instruction, pid))
-        .if_unhandled_try(|| Err(Error::UnknownInstruction))
+            .if_unhandled_try(|| self.handle_uint_sub(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_int_add(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_int_sub(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_int_to_uint(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_uint_to_int(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_uint_equalq(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_uint_gtq(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_uint_ltq(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_int_equalq(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_int_gtq(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_int_ltq(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_uint8_add(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_uint8_sub(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_int8_add(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_int8_sub(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_uint16_add(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_uint16_sub(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_int16_add(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_int16_sub(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_uint32_add(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_uint32_sub(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_int32_add(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_int32_sub(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_uint64_add(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_uint64_sub(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_int64_add(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_int64_sub(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_f32_add(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_f32_sub(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_f64_add(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_f64_sub(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_uint_to_string(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_int_to_string(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_to_string(env, instruction, pid))
+            .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
 
 impl<'a> Handler<'a> {
     pub fn new() -> Self {
-        Handler { phantom: PhantomData }
+        Handler {
+            phantom: PhantomData,
+        }
     }
 
-
     #[inline]
-    fn handle_uint_add(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_uint_add(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT_ADD);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -339,11 +340,12 @@ impl<'a> Handler<'a> {
         Ok(())
     }
 
-    fn handle_int_add(&mut self,
-                      env: &mut Env<'a>,
-                      instruction: &'a [u8],
-                      _: EnvId)
-                      -> PassResult<'a> {
+    fn handle_int_add(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT_ADD);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -358,11 +360,12 @@ impl<'a> Handler<'a> {
         Ok(())
     }
 
-    fn handle_int_sub(&mut self,
-                      env: &mut Env<'a>,
-                      instruction: &'a [u8],
-                      _: EnvId)
-                      -> PassResult<'a> {
+    fn handle_int_sub(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT_SUB);
         let b = env.pop().ok_or_else(|| error_empty_stack!())?;
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -377,14 +380,15 @@ impl<'a> Handler<'a> {
         Ok(())
     }
 
-    fn handle_int_to_uint(&mut self,
-                          env: &mut Env<'a>,
-                          instruction: &'a [u8],
-                          _: EnvId)
-                          -> PassResult<'a> {
+    fn handle_int_to_uint(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT_TO_UINT);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
-        let a_int : BigInt = a.unpack().ok_or(error_invalid_value!(a))?;
+        let a_int: BigInt = a.unpack().ok_or(error_invalid_value!(a))?;
 
         let a_uint = a_int.to_biguint().ok_or(error_invalid_value!(a))?;
         let slice = alloc_and_write!(a_uint.pack().as_slice(), env);
@@ -392,11 +396,12 @@ impl<'a> Handler<'a> {
         Ok(())
     }
 
-    fn handle_uint_to_int(&mut self,
-                          env: &mut Env<'a>,
-                          instruction: &'a [u8],
-                          _: EnvId)
-                          -> PassResult<'a> {
+    fn handle_uint_to_int(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT_TO_INT);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         let a_uint = BigUint::from_bytes_be(a);
@@ -411,11 +416,12 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_uint_sub(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_uint_sub(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT_SUB);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -436,252 +442,276 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_uint_equalq(&mut self,
-                          env: &mut Env<'a>,
-                          instruction: &'a [u8],
-                          _: EnvId)
-                          -> PassResult<'a> {
+    fn handle_uint_equalq(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         uint_comparison!(env, instruction, UINT_EQUALQ, eq)
     }
 
     #[inline]
-    fn handle_uint_gtq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_uint_gtq(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         uint_comparison!(env, instruction, UINT_GTQ, gt)
     }
 
     #[inline]
-    fn handle_uint_ltq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_uint_ltq(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         uint_comparison!(env, instruction, UINT_LTQ, lt)
     }
 
     #[inline]
-    fn handle_int_equalq(&mut self,
-                         env: &mut Env<'a>,
-                         instruction: &'a [u8],
-                         _: EnvId)
-                         -> PassResult<'a> {
+    fn handle_int_equalq(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         int_comparison!(env, instruction, INT_EQUALQ, eq)
     }
 
     #[inline]
-    fn handle_int_gtq(&mut self,
-                      env: &mut Env<'a>,
-                      instruction: &'a [u8],
-                      _: EnvId)
-                      -> PassResult<'a> {
+    fn handle_int_gtq(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         int_comparison!(env, instruction, INT_GTQ, gt)
     }
 
     #[inline]
-    fn handle_int_ltq(&mut self,
-                      env: &mut Env<'a>,
-                      instruction: &'a [u8],
-                      _: EnvId)
-                      -> PassResult<'a> {
+    fn handle_int_ltq(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         int_comparison!(env, instruction, INT_LTQ, lt)
     }
 
     #[inline]
-    fn handle_uint8_add(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_uint8_add(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT8_ADD);
         no_endianness_sized_uint_op!(env, read_u8, checked_add, write_u8)
     }
 
     #[inline]
-    fn handle_uint8_sub(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_uint8_sub(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT8_SUB);
         no_endianness_sized_uint_op!(env, read_u8, checked_sub, write_u8)
     }
 
     #[inline]
-    fn handle_int8_add(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_int8_add(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT8_ADD);
         no_endianness_sized_int_op!(env, read_i8, checked_add, write_i8)
     }
 
     #[inline]
-    fn handle_int8_sub(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_int8_sub(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT8_SUB);
         no_endianness_sized_int_op!(env, read_i8, checked_sub, write_i8)
     }
 
     #[inline]
-    fn handle_uint16_add(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_uint16_add(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT16_ADD);
         sized_uint_op!(env, read_u16, checked_add, write_u16)
     }
 
     #[inline]
-    fn handle_uint16_sub(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_uint16_sub(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT16_SUB);
         sized_uint_op!(env, read_u16, checked_sub, write_u16)
     }
 
     #[inline]
-    fn handle_int16_add(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_int16_add(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT16_ADD);
         sized_int_op!(env, read_i16, checked_add, write_i16)
     }
 
     #[inline]
-    fn handle_int16_sub(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_int16_sub(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT16_SUB);
         sized_int_op!(env, read_i16, checked_sub, write_i16)
     }
 
     #[inline]
-    fn handle_uint32_add(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_uint32_add(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT32_ADD);
         sized_uint_op!(env, read_u32, checked_add, write_u32)
     }
 
     #[inline]
-    fn handle_uint32_sub(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_uint32_sub(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT32_SUB);
         sized_uint_op!(env, read_u32, checked_sub, write_u32)
     }
 
     #[inline]
-    fn handle_int32_add(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_int32_add(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT32_ADD);
         sized_int_op!(env, read_i32, checked_add, write_i32)
     }
 
     #[inline]
-    fn handle_int32_sub(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_int32_sub(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT32_SUB);
         sized_int_op!(env, read_i32, checked_sub, write_i32)
     }
 
     #[inline]
-    fn handle_uint64_add(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_uint64_add(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT64_ADD);
         sized_uint_op!(env, read_u64, checked_add, write_u64)
     }
 
     #[inline]
-    fn handle_uint64_sub(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_uint64_sub(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT64_SUB);
         sized_uint_op!(env, read_u64, checked_sub, write_u64)
     }
 
     #[inline]
-    fn handle_int64_add(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_int64_add(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT64_ADD);
         sized_int_op!(env, read_i64, checked_add, write_i64)
     }
 
     #[inline]
-    fn handle_int64_sub(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_int64_sub(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT64_SUB);
         sized_int_op!(env, read_i64, checked_sub, write_i64)
     }
-    
+
     #[inline]
-    fn handle_f32_add(&mut self,
-                        env: &mut Env<'a>,
-                        instruction: &'a [u8],
-                        _: EnvId)
-                        -> PassResult<'a> {
+    fn handle_f32_add(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, F32_ADD);
         let a_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let a: f32 = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
-            
+
         let b_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b: f32 = b_bytes.unpack().ok_or(error_invalid_value!(b_bytes))?;
 
         let bytes = (a + b).pack();
         let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
-        
-        Ok(())                  
+
+        Ok(())
     }
 
     #[inline]
-    fn handle_f32_sub(&mut self,
-                      env: &mut Env<'a>,
-                      instruction: &'a [u8],
-                      _: EnvId)
-                      -> PassResult<'a> {
+    fn handle_f32_sub(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, F32_SUB);
         let a_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let a: f32 = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
-        
+
         let b_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b: f32 = b_bytes.unpack().ok_or(error_invalid_value!(b_bytes))?;
-        
+
         let bytes = (b - a).pack();
         let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
@@ -690,38 +720,40 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_f64_add(&mut self,
-                        env: &mut Env<'a>,
-                        instruction: &'a [u8],
-                        _: EnvId)
-                        -> PassResult<'a> {
+    fn handle_f64_add(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, F64_ADD);
         let a_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let a: f64 = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
-        
+
         let b_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b: f64 = b_bytes.unpack().ok_or(error_invalid_value!(b_bytes))?;
-        
+
         let bytes = (a + b).pack();
         let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
-        
-        Ok(())                  
+
+        Ok(())
     }
 
     #[inline]
-    fn handle_f64_sub(&mut self,
-                      env: &mut Env<'a>,
-                      instruction: &'a [u8],
-                      _: EnvId)
-                      -> PassResult<'a> {
+    fn handle_f64_sub(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, F64_SUB);
         let a_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let a: f64 = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
-        
+
         let b_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b: f64 = b_bytes.unpack().ok_or(error_invalid_value!(b_bytes))?;
-        
+
         let bytes = (b - a).pack();
         let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
@@ -730,11 +762,12 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_uint_to_string(&mut self,
-                        env: &mut Env<'a>,
-                        instruction: &'a [u8],
-                        _: EnvId)
-                        -> PassResult<'a> {
+    fn handle_uint_to_string(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT_TO_STRING);
 
         let a_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -748,13 +781,14 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_int_to_string(&mut self,
-                             env: &mut Env<'a>,
-                             instruction: &'a [u8],
-                             _: EnvId)
-                             -> PassResult<'a> {
+    fn handle_int_to_string(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT_TO_STRING);
-        
+
         let a_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let a: BigInt = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
 
@@ -766,30 +800,29 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_to_string(&mut self,
-                        env: &mut Env<'a>,
-                        instruction: &'a [u8],
-                        _: EnvId)
-                        -> PassResult<'a> {
-
+    fn handle_to_string(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         let s = match instruction {
-            UINT8_TO_STRING        => to_string!(env, u8),
-            INT8_TO_STRING         => to_string!(env, i8),
-            UINT16_TO_STRING       => to_string!(env, u16),
-            INT16_TO_STRING        => to_string!(env, i16),
-            UINT32_TO_STRING       => to_string!(env, u32),
-            INT32_TO_STRING        => to_string!(env, i32),
-            UINT64_TO_STRING       => to_string!(env, u64),
-            INT64_TO_STRING        => to_string!(env, i64),
-            F32_TO_STRING          => to_string!(env, f32),
-            F64_TO_STRING          => to_string!(env, f64),
-            
+            UINT8_TO_STRING => to_string!(env, u8),
+            INT8_TO_STRING => to_string!(env, i8),
+            UINT16_TO_STRING => to_string!(env, u16),
+            INT16_TO_STRING => to_string!(env, i16),
+            UINT32_TO_STRING => to_string!(env, u32),
+            INT32_TO_STRING => to_string!(env, i32),
+            UINT64_TO_STRING => to_string!(env, u64),
+            INT64_TO_STRING => to_string!(env, i64),
+            F32_TO_STRING => to_string!(env, f32),
+            F64_TO_STRING => to_string!(env, f64),
+
             _ => return Err(Error::UnknownInstruction),
         };
-        
+
         let val = alloc_and_write!(s.as_bytes(), env);
         env.push(val);
-
 
         Ok(())
     }

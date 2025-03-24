@@ -4,18 +4,20 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use pumpkinscript::{parse_bin, binparser};
+use pumpkinscript::{binparser, parse_bin};
 
-use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size, STACK_TRUE, STACK_FALSE, TryInstruction};
+use super::{
+    offset_by_size, Dispatcher, Env, EnvId, Error, PassResult, TryInstruction, ERROR_EMPTY_STACK,
+    ERROR_INVALID_VALUE, STACK_FALSE, STACK_TRUE,
+};
 
-use super::mod_stack::{PUSH, POP};
-use super::mod_queue::{TO_BQ, FROM_BQ};
+use super::mod_queue::{FROM_BQ, TO_BQ};
+use super::mod_stack::{POP, PUSH};
 use std::marker::PhantomData;
 
-use pumpkinscript;
 use num_bigint::BigUint;
 use num_traits::Zero;
+use pumpkinscript;
 
 // Category: Control flow
 #[cfg(feature = "scoped_dictionary")]
@@ -48,20 +50,20 @@ pub struct Handler<'a> {
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
         self.handle_builtins(env, instruction, pid)
-        .if_unhandled_try(|| self.handle_dowhile(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_times(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_scope_end(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_eval(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_eval_validp(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_eval_scoped(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_set(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_def(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_not(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_and(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_or(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_ifelse(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_featurep(env, instruction, pid))
-        .if_unhandled_try(|| Err(Error::UnknownInstruction))
+            .if_unhandled_try(|| self.handle_dowhile(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_times(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_scope_end(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_eval(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_eval_validp(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_eval_scoped(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_set(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_def(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_not(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_and(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_or(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_ifelse(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_featurep(env, instruction, pid))
+            .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
 
@@ -135,11 +137,12 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_ifelse(&mut self,
-                     env: &mut Env<'a>,
-                     instruction: &'a [u8],
-                     _: EnvId)
-                     -> PassResult<'a> {
+    fn handle_ifelse(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, IFELSE);
         let else_ = env.pop().ok_or_else(|| error_empty_stack!())?;
         let then = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -158,11 +161,12 @@ impl<'a> Handler<'a> {
 
     #[inline]
     #[cfg(feature = "scoped_dictionary")]
-    fn handle_eval_scoped(&mut self,
-                          env: &mut Env<'a>,
-                          instruction: &'a [u8],
-                          _: EnvId)
-                          -> PassResult<'a> {
+    fn handle_eval_scoped(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, EVAL_SCOPED);
         env.push_dictionary();
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -177,19 +181,18 @@ impl<'a> Handler<'a> {
         Err(Error::UnknownInstruction)
     }
 
-
     #[inline]
     #[cfg(feature = "scoped_dictionary")]
-    fn handle_scope_end(&mut self,
-                        env: &mut Env<'a>,
-                        instruction: &'a [u8],
-                        _: EnvId)
-                        -> PassResult<'a> {
+    fn handle_scope_end(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, SCOPE_END);
         env.pop_dictionary();
         Ok(())
     }
-
 
     #[inline]
     #[cfg(not(feature = "scoped_dictionary"))]
@@ -198,11 +201,12 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_eval(&mut self,
-                   env: &mut Env<'a>,
-                   instruction: &'a [u8],
-                   _: EnvId)
-                   -> PassResult<'a> {
+    fn handle_eval(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, EVAL);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         env.program.push(a);
@@ -210,11 +214,12 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_eval_validp(&mut self,
-                          env: &mut Env<'a>,
-                          instruction: &'a [u8],
-                          _: EnvId)
-                          -> PassResult<'a> {
+    fn handle_eval_validp(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, EVAL_VALIDP);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         if parse_bin(a).is_ok() {
@@ -226,11 +231,12 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_dowhile(&mut self,
-                      env: &mut Env<'a>,
-                      instruction: &'a [u8],
-                      _: EnvId)
-                      -> PassResult<'a> {
+    fn handle_dowhile(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, DOWHILE);
         let v = env.pop().ok_or_else(|| error_empty_stack!())?;
         let mut v1 = vec![];
@@ -240,16 +246,17 @@ impl<'a> Handler<'a> {
         v1.extend_from_slice(POP);
         v1.extend_from_slice(FROM_BQ);
 
-
         let mut vec = Vec::new();
 
-        let mut header = vec![0;offset_by_size(v.len() + DOWHILE.len() + offset_by_size(v.len()))];
-        write_size_into_slice!(offset_by_size(v.len()) + v.len() + DOWHILE.len(),
-                               header.as_mut_slice());
+        let mut header = vec![0; offset_by_size(v.len() + DOWHILE.len() + offset_by_size(v.len()))];
+        write_size_into_slice!(
+            offset_by_size(v.len()) + v.len() + DOWHILE.len(),
+            header.as_mut_slice()
+        );
         vec.append(&mut header);
 
         // inject code closure size
-        let mut header = vec![0;offset_by_size(v.len())];
+        let mut header = vec![0; offset_by_size(v.len())];
         write_size_into_slice!(v.len(), header.as_mut_slice());
         vec.append(&mut header);
 
@@ -269,11 +276,12 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_times(&mut self,
-                    env: &mut Env<'a>,
-                    instruction: &'a [u8],
-                    _: EnvId)
-                    -> PassResult<'a> {
+    fn handle_times(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, TIMES);
         let count = env.pop().ok_or_else(|| error_empty_stack!())?;
 
@@ -337,11 +345,12 @@ impl<'a> Handler<'a> {
 
     #[inline]
     #[allow(unused_variables)]
-    fn handle_featurep(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
+    fn handle_featurep(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, FEATUREQ);
         let name = env.pop().ok_or_else(|| error_empty_stack!())?;
 
@@ -357,32 +366,4 @@ impl<'a> Handler<'a> {
 
         Ok(())
     }
-}
-
-#[cfg(test)]
-#[allow(unused_variables, unused_must_use, unused_mut)]
-mod tests {
-
-    use pumpkinscript::parse;
-    use messaging;
-    use nvmem::{MmapedFile};
-    use script::{Scheduler, ResponseMessage, EnvId, dispatcher};
-    use std::sync::mpsc;
-    use std::sync::Arc;
-    use std::fs;
-    use tempdir::TempDir;
-    use lmdb;
-    use crossbeam;
-    use storage;
-    use timestamp;
-
-    const _EMPTY: &'static [u8] = b"";
-
-    use test::Bencher;
-
-    #[bench]
-    fn times(b: &mut Bencher) {
-        bench_eval!("[1 DROP] 1000 TIMES", b);
-    }
-
 }

@@ -4,16 +4,16 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use super::nvmem::NonVolatileMemory;
 use hlc;
 use std::sync::Mutex;
-use super::nvmem::NonVolatileMemory;
 
 #[derive(Debug)]
-pub struct Timestamp<N : NonVolatileMemory> {
+pub struct Timestamp<N: NonVolatileMemory> {
     clock: Mutex<(hlc::Clock<hlc::Wall>, N)>,
 }
 
-impl<N : NonVolatileMemory> Timestamp<N> {
+impl<N: NonVolatileMemory> Timestamp<N> {
     /// Create a new Timestamp clock. First the passed in memory map will be checked to check if
     /// a previous timestamp exists. If one exists (i.e. if the results aren't 20 bytes of 0) it
     /// will be "observed" by the HLC library.
@@ -29,7 +29,9 @@ impl<N : NonVolatileMemory> Timestamp<N> {
             }
             clock
         };
-        Timestamp { clock: Mutex::new((clock, nvmem)) }
+        Timestamp {
+            clock: Mutex::new((clock, nvmem)),
+        }
     }
 
     pub fn hlc(&self) -> hlc::Timestamp<hlc::WallT> {
@@ -45,16 +47,17 @@ impl<N : NonVolatileMemory> Timestamp<N> {
             Ok(_) => {
                 let _ = clock.0.now().write_bytes(&mut clock.1).unwrap();
                 Ok(())
-            },
-            Err(_) => Err(())
+            }
+            Err(_) => Err(()),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use nvmem::{MmapedFile};
-    use timestamp::Timestamp;
+    use crate::nvmem::MmapedFile;
+    use crate::timestamp::Timestamp;
+    use criterion::{criterion_group, criterion_main, Criterion};
     use hlc;
 
     #[test]
@@ -86,7 +89,6 @@ mod tests {
         assert!(p1 < p2);
     }
 
-    
     #[test]
     fn observe_updates_hlc() {
         let mut nvmem = MmapedFile::new_anonymous(20).unwrap();
@@ -103,13 +105,14 @@ mod tests {
         assert_eq!(t1.epoch, wall_epoch);
     }
 
-    use test::Bencher;
-
-    #[bench]
-    fn timestamp_generation(b: &mut Bencher) {
+    #[allow(dead_code)]
+    fn timestamp_generation(c: &mut Criterion) {
         let mut nvmem = MmapedFile::new_anonymous(20).unwrap();
         let region = nvmem.claim(20).unwrap();
         let timestamp = Timestamp::new(region);
-        b.iter(|| timestamp.hlc());
+        c.bench_function("timestamp_generation", |b| b.iter(|| timestamp.hlc()));
     }
+
+    criterion_group!(benches, timestamp_generation);
+    criterion_main!(benches);
 }

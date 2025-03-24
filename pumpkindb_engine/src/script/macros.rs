@@ -3,33 +3,32 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
-#[macro_export]
+#[allow(unused_macros)]
 macro_rules! builtins {
     ($file: expr) => {
-    lazy_static! {
-      static ref BUILTIN_FILE: &'static [u8] = include_bytes!($file);
-
-      static ref BUILTIN_DEFS: Vec<Vec<u8>> = ::pumpkinscript::textparser::programs(*BUILTIN_FILE).unwrap().1;
-
-      static ref BUILTINS: ::std::collections::BTreeMap<&'static [u8], &'static [u8]> = {
-          let mut map = ::std::collections::BTreeMap::new();
-          let ref defs : Vec<Vec<u8>> = *BUILTIN_DEFS;
-          for definition in defs {
-              match ::pumpkinscript::binparser::instruction(&definition) {
-                  ::pumpkinscript::ParseResult::Done(&[0x81, b':', ref rest..], _) => {
-                      let instruction = &definition[0..definition.len() - rest.len() - 2];
-                      map.insert(instruction, rest);
-                  },
-                  other => panic!("builtin definition parse error {:?}", other)
-              }
-          }
-          map
-      };
-    }};
+        static BUILTIN_FILE: &[u8] = include_bytes!($file);
+    
+        static BUILTIN_DEFS: ::std::sync::LazyLock<Vec<Vec<u8>>> = ::std::sync::LazyLock::new(|| {
+            ::pumpkinscript::textparser::programs(BUILTIN_FILE).unwrap().1
+        });
+        
+        static BUILTINS: ::std::sync::LazyLock<::std::collections::BTreeMap<&'static [u8], &'static [u8]>> = ::std::sync::LazyLock::new(|| {
+            let mut map = ::std::collections::BTreeMap::new();
+            for definition in BUILTIN_DEFS.iter() {
+                match ::pumpkinscript::binparser::instruction(&definition) {
+                    ::pumpkinscript::ParseResult::Done(&[0x81, b':', ref rest @ ..], _) => {
+                        let instruction = &definition[0..definition.len() - rest.len() - 2];
+                        map.insert(instruction, rest);
+                    },
+                    other => panic!("builtin definition parse error {:?}", other)
+                }
+            }
+            map
+        });
+    };
 }
 
-#[macro_export]
+#[allow(unused_macros)]
 macro_rules! handle_builtins {
     () => {
         #[inline]
@@ -49,7 +48,7 @@ macro_rules! handle_builtins {
     };
 }
 
-#[macro_export]
+#[allow(unused_macros)]
 macro_rules! handle_error {
     ($env: expr, $err: expr) => {
        handle_error!($env, $err, Ok(()))
@@ -64,7 +63,7 @@ macro_rules! handle_error {
     }};
 }
 
-#[macro_export]
+#[allow(unused_macros)]
 macro_rules! return_unless_instructions_equal {
     ($instruction: expr, $exp: expr) => {
         if $instruction != $exp {
@@ -73,7 +72,7 @@ macro_rules! return_unless_instructions_equal {
     };
 }
 
-#[macro_export]
+#[allow(unused_macros)]
 macro_rules! error_program {
     ($desc: expr, $details: expr, $code: expr) => {{
         let mut error = Vec::new();
@@ -81,7 +80,7 @@ macro_rules! error_program {
         write_size_header!($desc, error);
         error.extend_from_slice($desc);
 
-        if $details.len() > 0 {
+        if $details.len() > 0usize {
             write_size!($details.len() + offset_by_size($details.len()), error);
         }
 
@@ -94,20 +93,20 @@ macro_rules! error_program {
     }}
 }
 
-#[macro_export]
+#[allow(unused_macros)]
 macro_rules! error_database {
     ($err: expr) => {{
         let vec = Vec::new();
 
         error_program!(
-            $err.description().as_bytes(),
+            $err.to_string().as_bytes(),
             &vec,
             ERROR_DATABASE
         )
     }}
 }
 
-#[macro_export]
+#[allow(unused_macros)]
 macro_rules! error_no_transaction {
     () => {{
         let vec = Vec::new();
@@ -119,7 +118,7 @@ macro_rules! error_no_transaction {
     }}
 }
 
-#[macro_export]
+#[allow(unused_macros)]
 macro_rules! error_unknown_key {
     ($key: expr) => {{
         error_program!(
@@ -130,7 +129,7 @@ macro_rules! error_unknown_key {
     }}
 }
 
-#[macro_export]
+#[allow(unused_macros)]
 macro_rules! error_duplicate_key {
     ($key: expr) => {{
         error_program!(
@@ -141,7 +140,7 @@ macro_rules! error_duplicate_key {
     }}
 }
 
-#[macro_export]
+#[allow(unused_macros)]
 macro_rules! error_decoding {
     () => {{
         let vec = Vec::new();
@@ -153,7 +152,7 @@ macro_rules! error_decoding {
     }}
 }
 
-#[macro_export]
+#[allow(unused_macros)]
 macro_rules! error_empty_stack {
     () => {{
         let vec = Vec::new();
@@ -165,7 +164,7 @@ macro_rules! error_empty_stack {
     }}
 }
 
-#[macro_export]
+#[allow(unused_macros)]
 macro_rules! error_invalid_value {
     ($value: expr) => {{
         error_program!(
@@ -176,7 +175,7 @@ macro_rules! error_invalid_value {
     }}
 }
 
-#[macro_export]
+#[allow(unused_macros)]
 macro_rules! error_no_value {
     () => {{
         let vec = Vec::new();
@@ -188,12 +187,13 @@ macro_rules! error_no_value {
     }}
 }
 
-#[macro_export]
+#[allow(unused_macros)]
 macro_rules! error_unknown_instruction {
     ($instruction: expr) => { {
         let (_, w) = binparser::instruction_or_internal_instruction($instruction).unwrap();
 
-        let instruction = match str::from_utf8(&w[1..]) {
+        let w_slice = &[w][1..];
+        let instruction = match str::from_utf8(w_slice) {
             Ok(instruction) => instruction,
             Err(_) => "Error parsing instruction"
         };
@@ -209,7 +209,7 @@ macro_rules! error_unknown_instruction {
     } }
 }
 
-#[macro_export]
+#[allow(unused_macros)]
 macro_rules! alloc_slice {
     ($size: expr, $env: expr) => {{
         let slice = $env.alloc($size);
@@ -220,7 +220,7 @@ macro_rules! alloc_slice {
     }};
 }
 
-#[macro_export]
+#[allow(unused_macros)]
 macro_rules! alloc_and_write {
     ($bytes: expr, $env: expr) => {{
         let slice = alloc_slice!($bytes.len(), $env);
@@ -229,7 +229,6 @@ macro_rules! alloc_and_write {
     }};
 }
 
-// TODO: use or remove?
 #[allow(unused_macros)]
 #[cfg(test)]
 macro_rules! eval {
@@ -352,7 +351,7 @@ macro_rules! bench_eval {
                 }
                 let original_senders = senders.clone();
                 let script = parse($script).unwrap();
-                $b.iter(move || {
+                (0..1).into_iter().for_each(move |_| {
                     let (callback, receiver) = mpsc::channel::<ResponseMessage>();
                     let (sender0, _) = mpsc::channel();
                     let _ = senders.clone().schedule_env(EnvId::new(),

@@ -4,8 +4,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use nom::{IResult, Needed, ErrorKind};
-use super::{Program, ParseError};
+use super::{ParseError, Program};
+use nom::{ErrorKind, IResult, Needed};
 
 pub fn instruction_tag(i: &[u8]) -> IResult<&[u8], u8> {
     if i.len() < 1 {
@@ -19,12 +19,24 @@ pub fn instruction_tag(i: &[u8]) -> IResult<&[u8], u8> {
 
 pub fn internal_instruction_tag(i: &[u8]) -> IResult<&[u8], u8> {
     if i.len() < 2 {
-        IResult::Incomplete(Needed::Size(2))
-    } else if i[0] != 128 || i[1] < 129 {
-        IResult::Error(ErrorKind::Custom(128))
-    } else {
-        IResult::Done(&i[0..], i[1] - 128 + 2)
+        return IResult::Incomplete(Needed::Size(2));
     }
+    
+    if i[0] != 128 {
+        return IResult::Error(ErrorKind::Custom(100));
+    }
+
+    if i[1] < 129 {
+        return IResult::Error(ErrorKind::Custom(101));
+    }
+
+    let size = i[1] - 128 + 2;
+    
+    if size <= 0 {
+        return IResult::Error(ErrorKind::Custom(102));
+    }
+
+    IResult::Done(&i[0..], size)
 }
 
 pub fn micro_length(i: &[u8]) -> IResult<&[u8], usize> {
@@ -78,8 +90,8 @@ pub fn big_length(i: &[u8]) -> IResult<&[u8], usize> {
     } else if i[0] != 123 {
         IResult::Error(ErrorKind::Custom(123))
     } else {
-        let size = (i[1] as usize) << 24 | (i[2] as usize) << 16 | (i[3] as usize) << 8 |
-                   (i[4] as usize);
+        let size =
+            (i[1] as usize) << 24 | (i[2] as usize) << 16 | (i[3] as usize) << 8 | (i[4] as usize);
         if size > i.len() - 5 {
             IResult::Incomplete(Needed::Size(5 + size))
         } else {
@@ -100,12 +112,39 @@ named!(pub data_size<usize>, alt!(micro_length | byte_length | small_length | bi
 named!(pub data, length_bytes!(data_size));
 named!(pub instruction, length_bytes!(instruction_tag));
 named!(pub internal_instruction, length_bytes!(internal_instruction_tag));
-named!(pub instruction_or_internal_instruction, alt!(internal_instruction | instruction));
+named!(
+    pub instruction_or_internal_instruction<&[u8], u8>,
+    alt!(
+        do_parse!(
+            constant_name: dynamic_constant >>
+            (match get_constant(constant_name) {
+                Some(value) => value,
+                None => return IResult::Error(ErrorKind::Custom(404))
+            })
+        )
+        | map!(internal_instruction, |x: &[u8]| x[0])
+        | map!(instruction, |x: &[u8]| x[0])
+    )
+);
+named!(
+    pub dynamic_constant<&[u8], u8>, 
+    do_parse!(
+        tag!("$") >>
+        name: take!(1) >>
+        (name[0])
+    )
+);
 named!(item, alt!(instruction | data));
-named!(split_code<Vec<u8>>, do_parse!(
+named!(
+    split_code<Vec<u8>>,
+    do_parse!(
                              prog: many0!(item) >>
-                                   (flatten_program(prog))));
+                                   (flatten_program(prog)))
+);
 
+fn get_constant(name: u8) -> Option<u8> {
+    Some(name)
+}
 
 /// Parse code into a program. This function serves mainly
 /// as a binary form validator.
@@ -120,13 +159,16 @@ pub fn parse(code: &[u8]) -> Result<Program, ParseError> {
 
 #[cfg(test)]
 mod tests {
-    use textparser::parse as parse_text;
-    use binparser::parse;
+    use crate::binparser::parse;
+    use crate::textparser::parse as parse_text;
 
     #[test]
     fn test() {
         let v = parse_text("0x10 DUP").unwrap();
-        assert_eq!(parse(v.as_slice()).unwrap(), parse_text("0x10 DUP").unwrap());
+        assert_eq!(
+            parse(v.as_slice()).unwrap(),
+            parse_text("0x10 DUP").unwrap()
+        );
     }
 
     #[test]
@@ -142,7 +184,10 @@ mod tests {
             byte_sized_sequence.push_str("AA");
         }
         let v = parse_text(byte_sized_sequence.as_ref()).unwrap();
-        assert_eq!(parse(v.as_slice()).unwrap(), parse_text(byte_sized_sequence.as_ref()).unwrap());
+        assert_eq!(
+            parse(v.as_slice()).unwrap(),
+            parse_text(byte_sized_sequence.as_ref()).unwrap()
+        );
     }
 
     #[test]
@@ -152,7 +197,10 @@ mod tests {
             byte_sized_sequence.push_str("AA");
         }
         let v = parse_text(byte_sized_sequence.as_ref()).unwrap();
-        assert_eq!(parse(v.as_slice()).unwrap(), parse_text(byte_sized_sequence.as_ref()).unwrap());
+        assert_eq!(
+            parse(v.as_slice()).unwrap(),
+            parse_text(byte_sized_sequence.as_ref()).unwrap()
+        );
     }
 
     #[test]
@@ -162,7 +210,9 @@ mod tests {
             byte_sized_sequence.push_str("AA");
         }
         let v = parse_text(byte_sized_sequence.as_ref()).unwrap();
-        assert_eq!(parse(v.as_slice()).unwrap(), parse_text(byte_sized_sequence.as_ref()).unwrap());
+        assert_eq!(
+            parse(v.as_slice()).unwrap(),
+            parse_text(byte_sized_sequence.as_ref()).unwrap()
+        );
     }
-
 }

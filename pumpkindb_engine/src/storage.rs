@@ -3,17 +3,17 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
-use std::fs;
-#[cfg(not(target_os = "windows"))]
-use std::path;
-#[cfg(not(target_os = "windows"))]
-use std::ffi::CString;
 #[cfg(not(target_os = "windows"))]
 use libc::statvfs;
 use lmdb;
+#[cfg(not(target_os = "windows"))]
+use std::ffi::CString;
+use std::fs;
+#[cfg(not(target_os = "windows"))]
+use std::path;
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 pub struct WriteTransactionContainer<'a>(Option<lmdb::WriteTransaction<'a>>, Arc<AtomicBool>);
 
@@ -22,7 +22,9 @@ use core::ops::Deref;
 impl<'a> WriteTransactionContainer<'a> {
     pub fn commit(mut self) -> Result<(), lmdb::Error> {
         let commit = ::std::mem::replace(&mut self.0, None).unwrap().commit();
-        self.1.compare_and_swap(true, false, Ordering::SeqCst);
+        let _ = self
+            .1
+            .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst);
         commit
     }
 }
@@ -33,14 +35,16 @@ impl<'a> Deref for WriteTransactionContainer<'a> {
     fn deref(&self) -> &lmdb::WriteTransaction<'a> {
         match self.0 {
             Some(ref txn) => txn,
-            None => panic!("no transaction available")
+            None => panic!("no transaction available"),
         }
     }
 }
 
 impl<'a> Drop for WriteTransactionContainer<'a> {
     fn drop(&mut self) {
-        self.1.compare_and_swap(true, false, Ordering::SeqCst);
+        let _ = self
+            .1
+            .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst);
     }
 }
 
@@ -62,7 +66,7 @@ impl<'a> Storage<'a> {
             panic!("env should have NOTLS enabled");
         }
         Storage {
-            env: env,
+            env,
             db: lmdb::Database::open(env, None, &lmdb::DatabaseOptions::new(lmdb::db::CREATE))
                 .expect("can't open database"),
             write: Arc::new(AtomicBool::new(false)),
@@ -70,14 +74,16 @@ impl<'a> Storage<'a> {
     }
 
     pub fn write(&self) -> Option<Result<WriteTransactionContainer<'a>, lmdb::Error>> {
-        match self.write.compare_and_swap(false, true, Ordering::SeqCst) {
-            false => {
-                match lmdb::WriteTransaction::new(self.env) {
-                    Ok(txn) => Some(Ok(WriteTransactionContainer(Some(txn), self.write.clone()))),
-                    Err(err) => Some(Err(err))
-                }
+        match self
+            .write
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        {
+            Ok(false) => match lmdb::WriteTransaction::new(self.env) {
+                Ok(txn) => Some(Ok(WriteTransactionContainer(Some(txn), self.write.clone()))),
+                Err(err) => Some(Err(err)),
             },
-            true => None
+            Ok(true) => None,
+            Err(_) => None,
         }
     }
 
@@ -86,12 +92,16 @@ impl<'a> Storage<'a> {
             Ok(txn) => Some(Ok(txn)),
             // MDB_READERS_FULL
             Err(lmdb::Error::Code(-30790)) => None,
-            Err(err) => Some(Err(err))
+            Err(err) => Some(Err(err)),
         }
     }
 }
 
-pub fn create_environment(storage_path: String, map_size: Option<i64>, maxreaders: Option<u32>) -> lmdb::Environment {
+pub fn create_environment(
+    storage_path: String,
+    map_size: Option<i64>,
+    maxreaders: Option<u32>,
+) -> lmdb::Environment {
     unsafe {
         let mut env_builder = lmdb::EnvBuilder::new().expect("can't create env builder");
 
@@ -108,19 +118,25 @@ pub fn create_environment(storage_path: String, map_size: Option<i64>, maxreader
                     warn!("Can't determine available disk space");
                 } else {
                     let size = (stat.f_frsize * stat.f_bavail as u64) as usize;
-                    info!("Available disk space is approx. {}Gb, setting database map size to it",
-                          size / (1024 * 1024 * 1024));
+                    info!(
+                        "Available disk space is approx. {}Gb, setting database map size to it",
+                        size / (1024 * 1024 * 1024)
+                    );
                     env_builder.set_mapsize(size).expect("can't set map size");
                 }
             }
         } else {
             match map_size {
                 Some(mapsize) => {
-                    env_builder.set_mapsize(1024 * mapsize as usize).expect("can't set map size");
+                    env_builder
+                        .set_mapsize(1024 * mapsize as usize)
+                        .expect("can't set map size");
                 }
                 None => {
                     warn!("No default storage.mapsize set, setting it to 1Gb");
-                    env_builder.set_mapsize(1024 * 1024 * 1024).expect("can't set map size");
+                    env_builder
+                        .set_mapsize(1024 * 1024 * 1024)
+                        .expect("can't set map size");
                 }
             }
         }
@@ -128,7 +144,8 @@ pub fn create_environment(storage_path: String, map_size: Option<i64>, maxreader
             let _ = env_builder.set_maxreaders(max);
         }
 
-        env_builder.open(storage_path.as_str(), lmdb::open::NOTLS, 0o600)
+        env_builder
+            .open(storage_path.as_str(), lmdb::open::NOTLS, 0o600)
             .expect("can't open env")
     }
 }
@@ -136,13 +153,13 @@ pub fn create_environment(storage_path: String, map_size: Option<i64>, maxreader
 #[cfg(test)]
 #[allow(unused_variables, unused_must_use, unused_mut)]
 mod tests {
+    use lmdb;
     use std::fs;
     use tempdir::TempDir;
-    use lmdb;
 
     use std::sync::Arc;
 
-    use storage;
+    use crate::storage;
 
     #[test]
     pub fn read_limit() {
@@ -182,8 +199,8 @@ mod tests {
         assert!(db.read().is_none());
     }
 
-    use std::sync::mpsc;
     use crossbeam;
+    use std::sync::mpsc;
 
     #[test]
     pub fn write_limit() {
@@ -200,7 +217,6 @@ mod tests {
         let storage = Arc::new(storage::Storage::new(&env));
 
         crossbeam::scope(|scope| {
-
             let db = &(storage.clone());
 
             let w = db.write();
@@ -210,7 +226,7 @@ mod tests {
             // after dropping WriteTransactionContainer, write transactions
             // can be initiated again
             assert!(db.write().is_some());
-            drop(db);
+            let _ = db;
 
             // thread test
             let (sender_c1, receiver_c1) = mpsc::channel();
@@ -262,5 +278,4 @@ mod tests {
             thread2.join();
         });
     }
-
 }

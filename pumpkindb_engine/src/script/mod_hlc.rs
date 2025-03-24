@@ -15,32 +15,43 @@ instruction!(HLC_LC, b"\x86HLC/LC");
 instruction!(HLC_TICK, b"\x88HLC/TICK");
 instruction!(HLC_OBSERVE, b"\x8BHLC/OBSERVE");
 
-use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size, TryInstruction};
-use timestamp;
+use super::{
+    offset_by_size, Dispatcher, Env, EnvId, Error, PassResult, TryInstruction, ERROR_EMPTY_STACK,
+    ERROR_INVALID_VALUE,
+};
+use crate::timestamp;
 
+use super::super::nvmem::NonVolatileMemory;
+use byteorder::{BigEndian, WriteBytesExt};
 use hlc;
 use std::marker::PhantomData;
-use byteorder::{BigEndian, WriteBytesExt};
 use std::sync::Arc;
-use super::super::nvmem::NonVolatileMemory;
 
-pub struct Handler<'a, N> where N : NonVolatileMemory {
+pub struct Handler<'a, N>
+where
+    N: NonVolatileMemory,
+{
     phantom: PhantomData<&'a ()>,
     timestamp: Arc<timestamp::Timestamp<N>>,
 }
 
-impl<'a, N> Dispatcher<'a> for Handler<'a, N> where N : NonVolatileMemory {
+impl<'a, N> Dispatcher<'a> for Handler<'a, N>
+where
+    N: NonVolatileMemory,
+{
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
         self.handle_hlc(env, instruction, pid)
-        .if_unhandled_try(|| self.handle_hlc_lc(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_hlc_tick(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_hlc_observe(env, instruction, pid))
-        .if_unhandled_try(|| Err(Error::UnknownInstruction))
+            .if_unhandled_try(|| self.handle_hlc_lc(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_hlc_tick(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_hlc_observe(env, instruction, pid))
+            .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
 
-impl<'a, N> Handler<'a, N> where N : NonVolatileMemory {
+impl<'a, N> Handler<'a, N>
+where
+    N: NonVolatileMemory,
+{
     pub fn new(timestamp_state: Arc<timestamp::Timestamp<N>>) -> Self {
         Handler {
             phantom: PhantomData,
@@ -59,11 +70,12 @@ impl<'a, N> Handler<'a, N> where N : NonVolatileMemory {
     }
 
     #[inline]
-    pub fn handle_hlc_tick(&mut self,
-                           env: &mut Env<'a>,
-                           instruction: &'a [u8],
-                           _: EnvId)
-                           -> PassResult<'a> {
+    pub fn handle_hlc_tick(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, HLC_TICK);
 
         let a = env.pop();
@@ -91,11 +103,12 @@ impl<'a, N> Handler<'a, N> where N : NonVolatileMemory {
     }
 
     #[inline]
-    pub fn handle_hlc_lc(&mut self,
-                         env: &mut Env<'a>,
-                         instruction: &'a [u8],
-                         _: EnvId)
-                         -> PassResult<'a> {
+    pub fn handle_hlc_lc(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, HLC_LC);
         let a = env.pop();
 
@@ -122,11 +135,12 @@ impl<'a, N> Handler<'a, N> where N : NonVolatileMemory {
     }
 
     #[inline]
-    pub fn handle_hlc_observe(&mut self,
-                              env: &mut Env<'a>,
-                              instruction: &'a [u8],
-                              _: EnvId)
-                              -> PassResult<'a> {
+    pub fn handle_hlc_observe(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, HLC_OBSERVE);
         if let Some(mut observed_bytes) = env.pop() {
             if let Ok(observed_time) = hlc::Timestamp::read_bytes(&mut observed_bytes) {

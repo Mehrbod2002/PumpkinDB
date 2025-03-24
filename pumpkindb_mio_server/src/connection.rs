@@ -9,10 +9,11 @@ use std::io::prelude::*;
 use std::io::{Error, ErrorKind};
 use std::rc::Rc;
 
-use byteorder::{ByteOrder, BigEndian};
+use byteorder::{BigEndian, ByteOrder};
 
+use mio::net::*;
+use mio::unix::UnixReady;
 use mio::*;
-use mio::tcp::*;
 
 const MAX_PRE_ALLOC: usize = 10000;
 
@@ -46,9 +47,9 @@ pub struct Connection {
 impl Connection {
     pub fn new(sock: TcpStream, token: Token) -> Connection {
         Connection {
-            sock: sock,
-            token: token,
-            interest: Ready::hup(),
+            sock,
+            token,
+            interest: UnixReady::hup().into(),
             send_queue: Vec::new(),
             is_idle: true,
             is_reset: false,
@@ -58,12 +59,12 @@ impl Connection {
     }
 
     pub fn readable(&mut self) -> io::Result<Option<Vec<u8>>> {
-
-        let msg_len = match try!(self.read_message_length()) {
-            None => {
+        let msg_len = match self.read_message_length() {
+            Ok(None) => {
                 return Ok(None);
             }
-            Some(n) => n,
+            Ok(Some(n)) => n,
+            Err(_) => return Ok(None),
         };
 
         if msg_len == 0 {
@@ -78,10 +79,7 @@ impl Connection {
             msg_len
         };
 
-        let mut recv_buf: Vec<u8> = Vec::with_capacity(alloc_len);
-        unsafe {
-            recv_buf.set_len(alloc_len);
-        }
+        let mut recv_buf: Vec<u8> = vec![0; alloc_len];
 
         let mut read = 0;
 
@@ -101,8 +99,11 @@ impl Connection {
             };
             match sock_ref.take(read_next as u64).read(&mut recv_buf[read..]) {
                 Ok(n) => {
-                    if n < read_next as usize {
-                        return Err(Error::new(ErrorKind::InvalidData, "Did not read enough bytes"));
+                    if n < read_next {
+                        return Err(Error::new(
+                            ErrorKind::InvalidData,
+                            "Did not read enough bytes",
+                        ));
                     }
                     read += read_next;
                     self.read_continuation = None;
@@ -148,7 +149,6 @@ impl Connection {
     }
 
     pub fn writable(&mut self) -> io::Result<()> {
-
         self.send_queue
             .pop()
             .ok_or(Error::new(ErrorKind::Other, "Could not pop send queue"))
@@ -158,28 +158,23 @@ impl Connection {
                         self.send_queue.push(buf);
                         return Ok(());
                     }
-                    Ok(Some(())) => {
-                        ()
-                    }
+                    Ok(Some(())) => (),
                     Err(e) => {
                         return Err(e);
                     }
                 }
 
-                match self.sock.write(&*buf) {
+                match self.sock.write(&buf) {
                     Ok(_) => {
                         self.write_continuation = false;
                         Ok(())
                     }
-                    Err(e) => {
-                        if e.kind() == ErrorKind::WouldBlock {
-                            self.send_queue.push(buf);
-                            self.write_continuation = true;
-                            Ok(())
-                        } else {
-                            Err(e)
-                        }
+                    Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                        self.send_queue.push(buf);
+                        self.write_continuation = true;
+                        Ok(())
                     }
+                    Err(e) => Err(e),
                 }
             })?;
 
@@ -201,13 +196,8 @@ impl Connection {
 
         match self.sock.write(&send_buf) {
             Ok(_) => Ok(Some(())),
-            Err(e) => {
-                if e.kind() == ErrorKind::WouldBlock {
-                    Ok(None)
-                } else {
-                    Err(e)
-                }
-            }
+            Err(e) if e.kind() == ErrorKind::WouldBlock => Ok(None),
+            Err(e) => Err(e),
         }
     }
 
@@ -228,12 +218,10 @@ impl Connection {
             &self.sock,
             self.token,
             self.interest,
-            PollOpt::edge() | PollOpt::oneshot()
-        ).and_then(|(),| {
+            PollOpt::edge() | PollOpt::oneshot(),
+        )
+        .map(|()| {
             self.is_idle = false;
-            Ok(())
-        }).or_else(|e| {
-            Err(e)
         })
     }
 
@@ -242,12 +230,10 @@ impl Connection {
             &self.sock,
             self.token,
             self.interest,
-            PollOpt::edge() | PollOpt::oneshot()
-        ).and_then(|(),| {
+            PollOpt::edge() | PollOpt::oneshot(),
+        )
+        .map(|()| {
             self.is_idle = false;
-            Ok(())
-        }).or_else(|e| {
-            Err(e)
         })
     }
 

@@ -6,11 +6,7 @@
 extern crate alloc;
 
 #[cfg(test)]
-#[macro_use]
 extern crate matches;
-
-#[cfg(test)]
-extern crate test;
 
 extern crate core;
 
@@ -31,10 +27,6 @@ extern crate hybrid_clocks as hlc;
 extern crate byteorder;
 
 extern crate config;
-
-#[macro_use]
-extern crate lazy_static;
-
 extern crate crypto;
 
 extern crate serde_json;

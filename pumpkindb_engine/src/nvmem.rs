@@ -6,7 +6,7 @@
 
 use std::io::{Read, Write};
 
-pub trait NonVolatileMemory : Read + Write {}
+pub trait NonVolatileMemory: Read + Write {}
 
 use memmap::{Mmap, MmapViewSync, Protection};
 
@@ -20,41 +20,44 @@ pub struct MmapedFile {
 
 pub struct OutOfBoundsError;
 
-use std::path::PathBuf;
-use std::io;
 use std::fs::OpenOptions;
+use std::io;
+use std::path::PathBuf;
 
 impl MmapedFile {
-
     pub fn new(path: PathBuf, size: usize) -> Result<Self, io::Error> {
-        let file = OpenOptions::new().create(true).write(true).open(path.as_path())?;
+        let file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(path.as_path())?;
         let _ = file.set_len(size as u64)?;
         let mmap = Mmap::open_path(path.as_path(), Protection::ReadWrite)?;
-        Ok(MmapedFile{
-            size: size,
+        Ok(MmapedFile {
+            size,
             offset: 0,
             mmap: Some(mmap.into_view_sync()),
         })
     }
 
-
     pub fn new_anonymous(size: usize) -> Result<Self, io::Error> {
         let mmap = Mmap::anonymous(size, Protection::ReadWrite)?;
-        Ok(MmapedFile{
-            size: size,
+        Ok(MmapedFile {
+            size,
             offset: 0,
             mmap: Some(mmap.into_view_sync()),
         })
     }
 
     pub fn claim(&mut self, len: usize) -> Result<MmapedRegion, io::Error> {
-        let (mut new_view, view) = ::std::mem::replace(&mut self.mmap, None).unwrap().split_at(self.offset + len)?;
+        let (mut new_view, view) = ::std::mem::replace(&mut self.mmap, None)
+            .unwrap()
+            .split_at(self.offset + len)?;
         new_view.restrict(0, len)?;
         self.mmap = Some(view);
         self.offset += len;
         Ok(MmapedRegion {
             mmap: new_view,
-            len: len,
+            len,
         })
     }
 }
@@ -83,4 +86,3 @@ impl Write for MmapedRegion {
 }
 
 impl<'a> NonVolatileMemory for MmapedRegion {}
-

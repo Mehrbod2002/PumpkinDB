@@ -3,7 +3,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
+#![allow(non_snake_case)]
 use super::offset_by_size;
 
 pub trait Encodable {
@@ -81,7 +81,7 @@ macro_rules! tuple {
 }
 
 tuple! { T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19,
-         T20, T21, T22, T23, T24, T25, T26, T27, T28, T29, T30, }
+T20, T21, T22, T23, T24, T25, T26, T27, T28, T29, T30, }
 
 pub struct Instruction<'a>(pub &'a str);
 
@@ -106,9 +106,9 @@ impl<'a> Encodable for InstructionRef<'a> {
     }
 }
 
-pub struct Closure<T : Encodable>(pub T);
+pub struct Closure<T: Encodable>(pub T);
 
-impl<T : Encodable> Encodable for Closure<T> {
+impl<T: Encodable> Encodable for Closure<T> {
     fn encode(&self) -> Vec<u8> {
         self.0.encode().encode()
     }
@@ -117,30 +117,28 @@ impl<T : Encodable> Encodable for Closure<T> {
 #[derive(PartialEq, Debug)]
 pub enum Receivable {
     Data(Vec<u8>),
-    Instruction(String)
+    Instruction(String),
 }
 
 impl Encodable for Receivable {
     fn encode(&self) -> Vec<u8> {
         match self {
             &Receivable::Data(ref data) => data.encode(),
-            &Receivable::Instruction(ref instruction) =>
-                Instruction(&instruction).encode()
+            &Receivable::Instruction(ref instruction) => Instruction(&instruction).encode(),
         }
     }
 }
 
+use byteorder::{BigEndian, ReadBytesExt};
 use std::convert::TryFrom;
-use byteorder::{ReadBytesExt, BigEndian};
 use std::io::{Cursor, Read};
 
 impl<'a> TryFrom<&'a mut Cursor<Vec<u8>>> for Receivable {
-
     type Error = ();
 
     fn try_from(cursor: &'a mut Cursor<Vec<u8>>) -> Result<Self, Self::Error> {
         if cursor.position() as usize == cursor.get_ref().len() {
-            return Err(())
+            return Err(());
         }
         if cursor.get_ref()[cursor.position() as usize] & 0x80 == 0x80 {
             let len = (cursor.read_u8().unwrap() ^ 0x80) as usize;
@@ -188,33 +186,32 @@ mod tests {
         assert_eq!(receivable, Receivable::Instruction(String::from("DUP")));
     }
 
-
     #[test]
     fn data_nano() {
-        let program = vec![0;120].encode();
+        let program = vec![0; 120].encode();
         let receivable = Receivable::try_from(&mut Cursor::new(program)).unwrap();
-        assert_eq!(receivable, Receivable::Data(vec![0;120]));
+        assert_eq!(receivable, Receivable::Data(vec![0; 120]));
     }
 
     #[test]
     fn data_micro() {
-        let program = vec![0;255].encode();
+        let program = vec![0; 255].encode();
         let receivable = Receivable::try_from(&mut Cursor::new(program)).unwrap();
-        assert_eq!(receivable, Receivable::Data(vec![0;255]));
+        assert_eq!(receivable, Receivable::Data(vec![0; 255]));
     }
 
     #[test]
     fn data_small() {
-        let program = vec![0;65535].encode();
+        let program = vec![0; 65535].encode();
         let receivable = Receivable::try_from(&mut Cursor::new(program)).unwrap();
-        assert_eq!(receivable, Receivable::Data(vec![0;65535]));
+        assert_eq!(receivable, Receivable::Data(vec![0; 65535]));
     }
 
     #[test]
     fn data_large() {
-        let program = vec![0;100000].encode();
+        let program = vec![0; 100000].encode();
         let receivable = Receivable::try_from(&mut Cursor::new(program)).unwrap();
-        assert_eq!(receivable, Receivable::Data(vec![0;100000]));
+        assert_eq!(receivable, Receivable::Data(vec![0; 100000]));
     }
 
     #[test]
@@ -222,12 +219,14 @@ mod tests {
         let program = ("hello", Instruction("DUP")).encode();
         let mut cursor = Cursor::new(program);
         let receivable = Receivable::try_from(&mut cursor).unwrap();
-        assert_eq!(receivable, Receivable::Data(String::from("hello").into_bytes()));
+        assert_eq!(
+            receivable,
+            Receivable::Data(String::from("hello").into_bytes())
+        );
         let receivable = Receivable::try_from(&mut cursor).unwrap();
         assert_eq!(receivable, Receivable::Instruction(String::from("DUP")));
         assert!(Receivable::try_from(&mut cursor).is_err());
     }
-
 
     #[test]
     fn extra_data() {
@@ -237,7 +236,10 @@ mod tests {
         buf.extend_from_slice(b"goodbye");
         let mut cursor = Cursor::new(buf);
         let receivable = Receivable::try_from(&mut cursor).unwrap();
-        assert_eq!(receivable, Receivable::Data(String::from("hello").into_bytes()));
+        assert_eq!(
+            receivable,
+            Receivable::Data(String::from("hello").into_bytes())
+        );
         let receivable = Receivable::try_from(&mut cursor).unwrap();
         assert_eq!(receivable, Receivable::Instruction(String::from("DUP")));
         let mut res = vec![0; 7];
@@ -245,12 +247,11 @@ mod tests {
         assert_eq!(res, b"goodbye");
     }
 
-    use textparser::parse;
+    use crate::textparser::parse;
 
     #[test]
     fn into() {
         let p = (vec![1u8], (Instruction("DUP"), InstructionRef("DUP"))).encode();
         assert_eq!(parse("1 DUP 'DUP").unwrap(), p);
     }
-
 }

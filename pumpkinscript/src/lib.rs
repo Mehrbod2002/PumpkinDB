@@ -58,20 +58,18 @@
 //!   important part, the storage itself as transactional model of LMDB precludes us
 //!   from carrying these references outside of the scope of the transaction)
 //!
-#![feature(try_from)]
 extern crate core;
-#[macro_use] extern crate nom;
+#[macro_use]
+extern crate nom;
+extern crate byteorder;
 extern crate num_bigint;
 extern crate num_traits;
-extern crate byteorder;
-
 
 #[macro_use]
 pub mod macros;
 
 pub mod binparser;
 pub use self::binparser::parse as parse_bin;
-
 
 pub mod textparser;
 pub use self::textparser::parse;
@@ -81,17 +79,17 @@ pub use packable::{Packable, Unpackable};
 
 pub mod encodables;
 
-pub use self::encodables::{Encodable, Instruction, InstructionRef, Closure, Receivable};
+pub use self::encodables::{Closure, Encodable, Instruction, InstructionRef, Receivable};
 
 use std::fmt;
 
 #[inline]
 pub fn offset_by_size(size: usize) -> usize {
     match size {
-        0...120 => 1,
-        120...255 => 2,
-        255...65535 => 3,
-        65536...4294967296 => 5,
+        0..=120 => 1,
+        121..=255 => 2,
+        256..=65535 => 3,
+        65536..=4294967296 => 5,
         _ => unreachable!(),
     }
 }
@@ -116,13 +114,17 @@ impl fmt::Display for ParseError {
         match self {
             &ParseError::Incomplete => {
                 write!(f, "Incomplete input")
-            },
+            }
             &ParseError::Err(u32) => {
                 write!(f, "Error {}", u32)
-            },
+            }
             &ParseError::Superfluous(ref v) => {
-                write!(f, "Superfluous \"{}\"", String::from_utf8(v.clone()).unwrap().trim())
-            },
+                write!(
+                    f,
+                    "Superfluous \"{}\"",
+                    String::from_utf8(v.clone()).unwrap().trim()
+                )
+            }
             &ParseError::UnknownErr => {
                 write!(f, "Unknown error")
             }

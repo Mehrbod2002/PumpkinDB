@@ -4,13 +4,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::io::{Write, Read};
-use std::io;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use std::io;
+use std::io::{Read, Write};
 
-pub struct PacketWriter<T : Write>(T);
+pub struct PacketWriter<T: Write>(T);
 
-impl<T : Write> PacketWriter<T> {
+impl<T: Write> PacketWriter<T> {
     pub fn new(writer: T) -> Self {
         PacketWriter(writer)
     }
@@ -19,14 +19,12 @@ impl<T : Write> PacketWriter<T> {
     }
 }
 
-impl<T : Write> Write for PacketWriter<T> {
+impl<T: Write> Write for PacketWriter<T> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         match self.0.write_u32::<BigEndian>(buf.len() as u32) {
-            Ok(()) => {
-               match self.0.write(buf) {
-                   Ok(sz) => Ok(sz + 4),
-                   Err(err) => Err(err),
-               }
+            Ok(()) => match self.0.write(buf) {
+                Ok(sz) => Ok(sz + 4),
+                Err(err) => Err(err),
             },
             Err(err) => Err(err),
         }
@@ -37,9 +35,9 @@ impl<T : Write> Write for PacketWriter<T> {
     }
 }
 
-pub struct PacketReader<T : Read>(T);
+pub struct PacketReader<T: Read>(T);
 
-impl<T : Read> PacketReader<T> {
+impl<T: Read> PacketReader<T> {
     pub fn new(reader: T) -> Self {
         PacketReader(reader)
     }
@@ -51,24 +49,23 @@ impl<T : Read> PacketReader<T> {
         match self.0.read_u32::<BigEndian>() {
             Ok(size) => {
                 let mut buf = Vec::with_capacity(size as usize);
-                unsafe { buf.set_len(size as usize); }
+                unsafe {
+                    buf.set_len(size as usize);
+                }
                 match self.0.read(&mut buf) {
-                    Ok(_) => {
-                        Ok(buf)
-                    },
+                    Ok(_) => Ok(buf),
                     Err(err) => Err(err),
                 }
-            },
+            }
             Err(err) => Err(err),
         }
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use super::{PacketWriter, PacketReader};
-    use std::io::{Write, Cursor};
+    use super::{PacketReader, PacketWriter};
+    use std::io::{Cursor, Write};
 
     #[test]
     fn write() {
@@ -76,12 +73,12 @@ mod tests {
         let mut w = PacketWriter::new(v);
         let _ = w.write("hello".as_bytes()).unwrap();
         let result = w.writer();
-        assert_eq!(result, vec![0,0,0,5,b'h',b'e',b'l',b'l',b'o']);
+        assert_eq!(result, vec![0, 0, 0, 5, b'h', b'e', b'l', b'l', b'o']);
     }
 
     #[test]
     fn read() {
-        let v = vec![0,0,0,5,b'h',b'e',b'l',b'l',b'o'];
+        let v = vec![0, 0, 0, 5, b'h', b'e', b'l', b'l', b'o'];
         let mut r = PacketReader::new(Cursor::new(v));
         let result = r.read().unwrap();
         assert_eq!(result, "hello".as_bytes());

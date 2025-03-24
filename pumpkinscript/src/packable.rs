@@ -34,9 +34,9 @@ impl Packable for f32 {
 impl<'a> Unpackable<f32> for &'a [u8] {
     fn unpack(&self) -> Option<f32> {
         let mut vec: Vec<u8> = Vec::from(*self);
-        
+
         if vec.len() != 4 {
-            return None
+            return None;
         }
         if vec[0] >> 7 == 1u8 {
             vec[0] ^= 0x80;
@@ -52,7 +52,6 @@ impl<'a> Unpackable<f32> for &'a [u8] {
         }
     }
 }
-
 
 impl Packable for f64 {
     fn pack(&self) -> Vec<u8> {
@@ -72,9 +71,9 @@ impl Packable for f64 {
 impl<'a> Unpackable<f64> for &'a [u8] {
     fn unpack(&self) -> Option<f64> {
         let mut vec: Vec<u8> = Vec::from(*self);
-        
+
         if vec.len() != 8 {
-            return None
+            return None;
         }
         if vec[0] >> 7 == 1u8 {
             vec[0] ^= 0x80;
@@ -112,11 +111,11 @@ impl Packable for BigInt {
             }
             let mut nextbit = true;
             for i in (0..bytes.len()).rev() {
-                bytes[i] =  match bytes[i].checked_add(1) {
+                bytes[i] = match bytes[i].checked_add(1) {
                     Some(v) => {
                         nextbit = false;
                         v
-                    },
+                    }
                     None => 0,
                 };
                 if !nextbit {
@@ -126,7 +125,7 @@ impl Packable for BigInt {
         }
         let sign_byte = if sign == Sign::Minus { 0x00 } else { 0x01 };
         let mut v = vec![sign_byte];
-        
+
         v.extend_from_slice(&bytes);
         v
     }
@@ -147,7 +146,7 @@ impl<'a> Unpackable<BigInt> for &'a [u8] {
                         Some(v) => {
                             nextbit = false;
                             v
-                        },
+                        }
                         None => 0,
                     };
                     if !nextbit {
@@ -156,7 +155,7 @@ impl<'a> Unpackable<BigInt> for &'a [u8] {
                 }
                 Some(BigInt::from_bytes_be(Sign::Minus, &bytes))
             }
-            _ => None
+            _ => None,
         }
     }
 }
@@ -180,7 +179,7 @@ macro_rules! packable_int_impl {
                 bytes
             }
         }
-    }
+    };
 }
 
 packable_int_impl!(i16, write_i16, 2);
@@ -204,7 +203,7 @@ macro_rules! packable_uint_impl {
                 bytes
             }
         }
-    }
+    };
 }
 
 packable_uint_impl!(u16, write_u16, 2);
@@ -219,14 +218,12 @@ impl<'a> Unpackable<i8> for &'a [u8] {
     }
 }
 
-
 impl<'a> Unpackable<u8> for &'a [u8] {
     fn unpack(&self) -> Option<u8> {
         let v = Vec::from(*self);
         v.as_slice().read_u8().ok()
     }
 }
-
 
 macro_rules! unpackable_uint_impl {
     ($type: ident, $read: ident) => {
@@ -236,8 +233,7 @@ macro_rules! unpackable_uint_impl {
                 Some(BigEndian::$read(v.as_slice()))
             }
         }
-
-    }
+    };
 }
 
 macro_rules! unpackable_int_impl {
@@ -249,8 +245,7 @@ macro_rules! unpackable_int_impl {
                 Some(BigEndian::$read(v.as_slice()))
             }
         }
-
-    }
+    };
 }
 
 unpackable_uint_impl!(u16, read_u16);
@@ -261,11 +256,10 @@ unpackable_int_impl!(i16, read_i16);
 unpackable_int_impl!(i32, read_i32);
 unpackable_int_impl!(i64, read_i64);
 
-
 #[cfg(test)]
 mod tests {
-    use core::str::FromStr;
     use super::*;
+    use core::str::FromStr;
 
     #[test]
     fn test_f32_pos() {

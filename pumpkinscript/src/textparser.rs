@@ -5,15 +5,15 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use byteorder::{BigEndian, WriteBytesExt};
-use nom::{IResult, ErrorKind};
-use nom::{is_hex_digit, multispace, is_digit};
+use nom::{is_digit, is_hex_digit, multispace};
+use nom::{ErrorKind, IResult};
 
+use core::str::FromStr;
 use num_bigint::{BigUint, Sign};
 use num_traits::Zero;
-use core::str::FromStr;
 use std::str;
 
-use super::{Program, Packable, ParseError};
+use super::{Packable, ParseError, Program};
 
 fn prefix_instruction(instruction: &[u8]) -> Vec<u8> {
     let mut vec = Vec::new();
@@ -25,37 +25,36 @@ fn prefix_instruction(instruction: &[u8]) -> Vec<u8> {
 #[inline]
 fn hex_digit(v: u8) -> u8 {
     match v {
-        0x61u8...0x66u8 => v - 32 - 0x41 + 10,
-        0x41u8...0x46u8 => v - 0x41 + 10,
+        0x61u8..=0x66u8 => v - 32 - 0x41 + 10,
+        0x41u8..=0x46u8 => v - 0x41 + 10,
         _ => v - 48,
     }
 }
 
 macro_rules! write_size {
     ($vec : expr, $size : expr) => {
-      match $size {
-        0...120 => $vec.push($size as u8),
-        121...255 => {
-            $vec.push(121u8);
-            $vec.push($size as u8);
+        match $size {
+            0..=120 => $vec.push($size as u8),
+            121..=255 => {
+                $vec.push(121u8);
+                $vec.push($size as u8);
+            }
+            256..=65535 => {
+                $vec.push(122u8);
+                $vec.push(($size >> 8) as u8);
+                $vec.push($size as u8);
+            }
+            65536..=4294967296 => {
+                $vec.push(123u8);
+                $vec.push(($size >> 24) as u8);
+                $vec.push(($size >> 16) as u8);
+                $vec.push(($size >> 8) as u8);
+                $vec.push($size as u8);
+            }
+            _ => unreachable!(),
         }
-        256...65535 => {
-            $vec.push(122u8);
-            $vec.push(($size >> 8) as u8);
-            $vec.push($size as u8);
-        }
-        65536...4294967296 => {
-            $vec.push(123u8);
-            $vec.push(($size >> 24) as u8);
-            $vec.push(($size >> 16) as u8);
-            $vec.push(($size >> 8) as u8);
-            $vec.push($size as u8);
-        }
-        _ => unreachable!()
-      }
     };
 }
-
 
 fn bin(bin: &[u8]) -> Vec<u8> {
     let mut bin_ = Vec::new();
@@ -92,12 +91,23 @@ fn sized_vec(s: Vec<u8>) -> Vec<u8> {
 }
 
 fn is_instruction_char(s: u8) -> bool {
-    (s >= b'a' && s <= b'z') || (s >= b'A' && s <= b'Z') ||
-    (s >= b'0' && s <= b'9') || s == b'_' || s == b':' || s == b'-' || s == b'=' ||
-    s == b'!' || s == b'#' ||
-    s == b'$' || s == b'%' || s == b'@' || s == b'?' || s == b'/' || s == b'<' || s == b'>'
+    (s >= b'a' && s <= b'z')
+        || (s >= b'A' && s <= b'Z')
+        || (s >= b'0' && s <= b'9')
+        || s == b'_'
+        || s == b':'
+        || s == b'-'
+        || s == b'='
+        || s == b'!'
+        || s == b'#'
+        || s == b'$'
+        || s == b'%'
+        || s == b'@'
+        || s == b'?'
+        || s == b'/'
+        || s == b'<'
+        || s == b'>'
 }
-
 
 fn flatten_program(p: Vec<Vec<u8>>) -> Vec<u8> {
     let mut vec = Vec::new();
@@ -127,255 +137,314 @@ fn is_multispace(s: u8) -> bool {
     s == b'\n' || s == b'\r' || s == b'\t' || s == b' '
 }
 
-named!(sign_ch<char>,
-       do_parse!(
-           sign_ch: alt!(tag!("+") | tag!("-")) >>
-               ({
-                   sign_ch[0] as char
-               })));
-           
-
-named!(sign<Sign>,
+named!(
+    sign_ch<char>,
     do_parse!(
-        sign: sign_ch >>
+    sign_ch: alt!(tag!("+") | tag!("-")) >>
         ({
-            if sign == '-' {
-                Sign::Minus
-            } else {
-                Sign::Plus
-            }
-        })));
+            sign_ch[0] as char
+        }))
+);
 
-named!(int_str<String>,
-       do_parse!(
+named!(
+    sign<Sign>,
+    do_parse!(
+    sign: sign_ch >>
+    ({
+        if sign == '-' {
+            Sign::Minus
+        } else {
+            Sign::Plus
+        }
+    }))
+);
+
+named!(
+    int_str<String>,
+    do_parse!(
            sign_opt: opt!(sign_ch)              >>
                num_part: take_while1!(is_digit) >>
                ({
                    let sign_str = if let Some(sign) = sign_opt { sign.to_string() } else { "".to_owned() };
-                   (sign_str + str::from_utf8(num_part).unwrap())})));
-           
+                   sign_str + str::from_utf8(num_part).unwrap()}))
+);
 
-
-named!(biguint<BigUint>,
+named!(
+    biguint<BigUint>,
     do_parse!(
         biguint: take_while1!(is_digit) >>
         delim_or_end                    >>
-        (BigUint::from_str(str::from_utf8(biguint).unwrap()).unwrap())));
+        (BigUint::from_str(str::from_utf8(biguint).unwrap()).unwrap()))
+);
 
-named!(u8int<Vec<u8>>,
+named!(
+    u8int<Vec<u8>>,
     do_parse!(
-        n: map_res!(int_str, |s: String| u8::from_str(&s)) >>
-        tag!("u8")                  >>
-        delim_or_end                >>
-        ({
-            let mut u8i = vec![];
-            u8i.write_u8(n).unwrap();
-            u8i
-        })));
+    n: map_res!(int_str, |s: String| u8::from_str(&s)) >>
+    tag!("u8")                  >>
+    delim_or_end                >>
+    ({
+        let mut u8i = vec![];
+        u8i.write_u8(n).unwrap();
+        u8i
+    }))
+);
 
-named!(u16int<Vec<u8>>,
-     do_parse!(
-        n: map_res!(int_str, |s: String| u16::from_str(&s)) >>
-        tag!("u16")                 >>
-        delim_or_end                >>
-        ({
-            let mut u16i = vec![];
-            u16i.write_u16::<BigEndian>(n).unwrap();
-            u16i
-        })));
-
-named!(u32int<Vec<u8>>,
+named!(
+    u16int<Vec<u8>>,
     do_parse!(
-        n: map_res!(int_str, |s: String| u32::from_str(&s)) >>
-        tag!("u32")                 >>
-        delim_or_end                >>
-        ({
-            let mut u32i = vec![];
-            u32i.write_u32::<BigEndian>(n).unwrap();
-            u32i
-        })));
+    n: map_res!(int_str, |s: String| u16::from_str(&s)) >>
+    tag!("u16")                 >>
+    delim_or_end                >>
+    ({
+        let mut u16i = vec![];
+        u16i.write_u16::<BigEndian>(n).unwrap();
+        u16i
+    }))
+);
 
-named!(u64int<Vec<u8>>,
+named!(
+    u32int<Vec<u8>>,
     do_parse!(
-        n: map_res!(int_str, |s: String| u64::from_str(&s)) >>
-        tag!("u64")                 >>
-        delim_or_end                >>
-        ({
-            let mut u64i = vec![];
-            u64i.write_u64::<BigEndian>(n).unwrap();
-            u64i
-        })));
+    n: map_res!(int_str, |s: String| u32::from_str(&s)) >>
+    tag!("u32")                 >>
+    delim_or_end                >>
+    ({
+        let mut u32i = vec![];
+        u32i.write_u32::<BigEndian>(n).unwrap();
+        u32i
+    }))
+);
 
-named!(int8<Vec<u8>>,
+named!(
+    u64int<Vec<u8>>,
     do_parse!(
-        n: map_res!(int_str, |s: String| i8::from_str(&s)) >>
-        tag!("i8")                  >>
-        delim_or_end                >>
-        ({
-            let mut i8 = vec![];
-            i8.write_i8(n).unwrap();
-            i8[0] ^= 1u8 << 7;
-            i8
-        })));
+    n: map_res!(int_str, |s: String| u64::from_str(&s)) >>
+    tag!("u64")                 >>
+    delim_or_end                >>
+    ({
+        let mut u64i = vec![];
+        u64i.write_u64::<BigEndian>(n).unwrap();
+        u64i
+    }))
+);
 
-named!(int16<Vec<u8>>,
+named!(
+    int8<Vec<u8>>,
     do_parse!(
-        n: map_res!(int_str, |s: String| i16::from_str(&s)) >>
-        tag!("i16")                 >>
-        delim_or_end                >>
-        ({
-            let mut i16 = vec![];
-            i16.write_i16::<BigEndian>(n).unwrap();
-            i16[0] ^= 1u8 << 7;
-            i16
-        })));
+    n: map_res!(int_str, |s: String| i8::from_str(&s)) >>
+    tag!("i8")                  >>
+    delim_or_end                >>
+    ({
+        let mut i8 = vec![];
+        i8.write_i8(n).unwrap();
+        i8[0] ^= 1u8 << 7;
+        i8
+    }))
+);
 
-named!(int32<Vec<u8>>,
+named!(
+    int16<Vec<u8>>,
     do_parse!(
-        n: map_res!(int_str, |s: String| i32::from_str(&s)) >>
-        tag!("i32")                 >>
-        delim_or_end                >>
-        ({
-            let mut i32 = vec![];
-            i32.write_i32::<BigEndian>(n).unwrap();
-            i32[0] ^= 1u8 << 7;
-            i32
-        })));
+    n: map_res!(int_str, |s: String| i16::from_str(&s)) >>
+    tag!("i16")                 >>
+    delim_or_end                >>
+    ({
+        let mut i16 = vec![];
+        i16.write_i16::<BigEndian>(n).unwrap();
+        i16[0] ^= 1u8 << 7;
+        i16
+    }))
+);
 
-named!(int64<Vec<u8>>,
+named!(
+    int32<Vec<u8>>,
     do_parse!(
-        n: map_res!(int_str, |s: String| i64::from_str(&s)) >>
-        tag!("i64")                 >>
-        delim_or_end                >>
-        ({
-            let mut i64 = vec![];
-            i64.write_i64::<BigEndian>(n).unwrap();
-            i64[0] ^= 1u8 << 7;
-            i64
-        })));
+    n: map_res!(int_str, |s: String| i32::from_str(&s)) >>
+    tag!("i32")                 >>
+    delim_or_end                >>
+    ({
+        let mut i32 = vec![];
+        i32.write_i32::<BigEndian>(n).unwrap();
+        i32[0] ^= 1u8 << 7;
+        i32
+    }))
+);
 
-named!(sint<Vec<u8>>,
+named!(
+    int64<Vec<u8>>,
     do_parse!(
-        sign: sign        >>
-        biguint: biguint  >>
-        ({
-            let mut bytes = if sign == Sign::Minus && !biguint.is_zero() {
-                vec![0x00]
-           } else {
-                vec![0x01]
-            };
-           let big = biguint.to_bytes_be();
-           let mut compv: Vec<u8> = vec![];
-           //Encode with two's complement.
-           if sign == Sign::Minus && !biguint.is_zero() {
-                for byte in big {
-                    compv.push(!byte);
+    n: map_res!(int_str, |s: String| i64::from_str(&s)) >>
+    tag!("i64")                 >>
+    delim_or_end                >>
+    ({
+        let mut i64 = vec![];
+        i64.write_i64::<BigEndian>(n).unwrap();
+        i64[0] ^= 1u8 << 7;
+        i64
+    }))
+);
+
+named!(
+    sint<Vec<u8>>,
+    do_parse!(
+    sign: sign        >>
+    biguint: biguint  >>
+    ({
+        let mut bytes = if sign == Sign::Minus && !biguint.is_zero() {
+            vec![0x00]
+       } else {
+            vec![0x01]
+        };
+       let big = biguint.to_bytes_be();
+       let mut compv: Vec<u8> = vec![];
+       //Encode with two's complement.
+       if sign == Sign::Minus && !biguint.is_zero() {
+            for byte in big {
+                compv.push(!byte);
+            }
+            let mut nextbit = true;
+            for i in (0..compv.len()).rev() {
+                compv[i] =  match compv[i].checked_add(1) {
+                    Some(v) => {
+                        nextbit = false;
+                        v
+                    },
+                    None => 0,
+                };
+                if !nextbit {
+                    break;
                 }
-                let mut nextbit = true;
-                for i in (0..compv.len()).rev() {
-                    compv[i] =  match compv[i].checked_add(1) {
-                        Some(v) => {
-                            nextbit = false;
-                            v
-                        },
-                        None => 0,
-                    };
-                    if !nextbit {
-                        break;
-                    }
-                }
-           } else {
-               compv = big;
-           }
-           //compv[0] ^= 1u8 << 7;
-           bytes.extend_from_slice(&compv);
-           (sized_vec(bytes))
-        })));
+            }
+       } else {
+           compv = big;
+       }
+       //compv[0] ^= 1u8 << 7;
+       bytes.extend_from_slice(&compv);
+       sized_vec(bytes)
+    }))
+);
 
-named!(uint<Vec<u8>>,
+named!(
+    uint<Vec<u8>>,
     do_parse!(
         biguint: biguint >>
-        (sized_vec(biguint.to_bytes_be()))));
+        (sized_vec(biguint.to_bytes_be())))
+);
 
-named!(int_sized<Vec<u8>>,
+named!(
+    int_sized<Vec<u8>>,
     do_parse!(
         int: alt!(u8int | int8 | u16int | int16 | u32int | int32 | u64int | int64 ) >>
-            (sized_vec(int))));
+            (sized_vec(int)))
+);
 
-named!(float32<Vec<u8>>,
-       do_parse!(
-           sign: opt!(sign_ch)           >>
-           left: take_while1!(is_digit)  >>
-           char!('.')                    >>
-           right: take_while1!(is_digit) >>
-           tag!("f32")                   >>
-           delim_or_end                  >>
-               ({
-                   let mut bytes = vec![];
-                   if let Some('-') = sign {
-                       bytes.extend_from_slice(b"-");
-                   }
-                   bytes.extend_from_slice(left);
-                   bytes.extend_from_slice(b".");
-                   bytes.extend_from_slice(right);
-                   let mut val = str::from_utf8(&bytes).unwrap().parse::<f32>().unwrap();
-                   // a little tricky: +0.0f32 == -0.0f32, but they don't serialize
-                   // to the same bytes. negative sign in the comparison left to indicate
-                   // intent, but technically unnecessary  
-                   if val == -0.0f32 {
-                       val = 0.0f32;
-                   }
-                   (sized_vec(val.pack()))
-               })));
+named!(
+    float32<Vec<u8>>,
+    do_parse!(
+    sign: opt!(sign_ch)           >>
+    left: take_while1!(is_digit)  >>
+    char!('.')                    >>
+    right: take_while1!(is_digit) >>
+    tag!("f32")                   >>
+    delim_or_end                  >>
+        ({
+            let mut bytes = vec![];
+            if let Some('-') = sign {
+                bytes.extend_from_slice(b"-");
+            }
+            bytes.extend_from_slice(left);
+            bytes.extend_from_slice(b".");
+            bytes.extend_from_slice(right);
+            let mut val = str::from_utf8(&bytes).unwrap().parse::<f32>().unwrap();
+            // a little tricky: +0.0f32 == -0.0f32, but they don't serialize
+            // to the same bytes. negative sign in the comparison left to indicate
+            // intent, but technically unnecessary
+            if val == -0.0f32 {
+                val = 0.0f32;
+            }
+            sized_vec(val.pack())
+        }))
+);
 
-named!(float64<Vec<u8>>,
-       do_parse!(
-           sign: opt!(sign_ch)           >>
-               left: take_while1!(is_digit)  >>
-               char!('.')                    >>
-               right: take_while1!(is_digit) >>
-               tag!("f64")                   >>
-               delim_or_end                  >>
-               ({
-                   let mut bytes = vec![];
-                   if let Some('-') = sign {
-                       bytes.extend_from_slice(b"-");
-                   }
-                   bytes.extend_from_slice(left);
-                   bytes.extend_from_slice(b".");
-                   bytes.extend_from_slice(right);
-                   let mut val = str::from_utf8(&bytes).unwrap().parse::<f64>().unwrap();
-                   // see note on float32
-                   if val == -0.0f64 {
-                       val = 0.0f64;
-                   }
-                   (sized_vec(val.pack()))
-               })));
+named!(
+    float64<Vec<u8>>,
+    do_parse!(
+    sign: opt!(sign_ch)           >>
+        left: take_while1!(is_digit)  >>
+        char!('.')                    >>
+        right: take_while1!(is_digit) >>
+        tag!("f64")                   >>
+        delim_or_end                  >>
+        ({
+            let mut bytes = vec![];
+            if let Some('-') = sign {
+                bytes.extend_from_slice(b"-");
+            }
+            bytes.extend_from_slice(left);
+            bytes.extend_from_slice(b".");
+            bytes.extend_from_slice(right);
+            let mut val = str::from_utf8(&bytes).unwrap().parse::<f64>().unwrap();
+            // see note on float32
+            if val == -0.0f64 {
+                val = 0.0f64;
+            }
+            sized_vec(val.pack())
+        }))
+);
 
-    
-named!(instruction<Vec<u8>>, do_parse!(
+named!(
+    instruction<Vec<u8>>,
+    do_parse!(
                         instruction: take_while1!(is_instruction_char)  >>
-                              (prefix_instruction(instruction))));
-named!(instructionref<Vec<u8>>, do_parse!(tag!(b"'") >> w: instruction >> (sized_vec(w))));
-named!(binary<Vec<u8>>, do_parse!(
-                              tag!(b"0x")                 >>
-                         hex: take_while1!(is_hex_digit)  >>
-                              (bin(hex))
-));
-named!(string<Vec<u8>>,  alt!(do_parse!(tag!(b"\"\"") >> (vec![0])) |
-                         do_parse!(
+                              (prefix_instruction(instruction)))
+);
+named!(
+    instructionref<Vec<u8>>,
+    do_parse!(tag!(b"'") >> w: instruction >> (sized_vec(w)))
+);
+named!(
+    binary<Vec<u8>>,
+    do_parse!(
+                                  tag!(b"0x")                 >>
+                             hex: take_while1!(is_hex_digit)  >>
+                                  (bin(hex))
+    )
+);
+named!(
+    string<Vec<u8>>,
+    alt!(
+        do_parse!(tag!(b"\"\"") >> (vec![0]))
+            | do_parse!(
                          str: delimited!(char!('"'),
                                          escaped!(is_not!("\"\\"), '\\', one_of!("\"n\\")),
                                          char!('"')) >>
-                              (string_to_vec(str)))));
-named!(comment_, do_parse!(
-                               char!('(')                            >>
-                               many0!(alt!(is_not!("()") | comment_ | is_not!(")"))) >>
-                               char!(')')                            >>
-                               (&[])));
+                              (string_to_vec(str)))
+    )
+);
+named!(
+    comment_,
+    do_parse!(
+        char!('(') >> many0!(alt!(is_not!("()") | comment_ | is_not!(")"))) >> char!(')') >> (&[])
+    )
+);
 named!(comment<Vec<u8>>, do_parse!(comment_ >> (vec![])));
-named!(item<Vec<u8>>, alt!(comment | uint | binary | string | sint | int_sized | float32 |
-                           float64 | wrap | instructionref | instruction));
+named!(
+    item<Vec<u8>>,
+    alt!(
+        comment
+            | uint
+            | binary
+            | string
+            | sint
+            | int_sized
+            | float32
+            | float64
+            | wrap
+            | instructionref
+            | instruction
+    )
+);
 
 fn unwrap_instruction(mut instruction: Vec<u8>) -> Vec<u8> {
     let mut vec = Vec::new();
@@ -421,51 +490,76 @@ fn rewrap(prog: Vec<u8>) -> Vec<u8> {
     for _ in 0..counter - 1 {
         vec.append(&mut prefix_instruction(b"CONCAT"));
     }
-    if counter == 0 { sized_vec(vec) } else { vec }
+    if counter == 0 {
+        sized_vec(vec)
+    } else {
+        vec
+    }
 }
 
 use super::binparser::instruction_tag;
-named!(bin_instruction<Vec<u8>>, do_parse!(v: length_bytes!(instruction_tag) >> (Vec::from(v))));
+named!(
+    bin_instruction<Vec<u8>>,
+    do_parse!(v: length_bytes!(instruction_tag) >> (Vec::from(v)))
+);
 
-named!(bin_unwrap<Vec<u8>>, do_parse!(
+named!(
+    bin_unwrap<Vec<u8>>,
+    do_parse!(
                               tag!(b"`")                   >>
                         instruction: alt!(bin_instruction | bin_unwrap)  >>
-                              (unwrap_instruction(instruction))));
+                              (unwrap_instruction(instruction)))
+);
 
-named!(unwrap<Vec<u8>>, do_parse!(
+named!(
+    unwrap<Vec<u8>>,
+    do_parse!(
                               tag!(b"`")                 >>
                         instruction: alt!(instruction | unwrap)        >>
-                              (unwrap_instruction(instruction))));
-named!(wrap<Vec<u8>>, do_parse!(
+                              (unwrap_instruction(instruction)))
+);
+named!(
+    wrap<Vec<u8>>,
+    do_parse!(
                          prog: delimited!(char!('['), ws!(wrapped_program), char!(']')) >>
-                               (rewrap(prog))));
+                               (rewrap(prog)))
+);
 named!(wrapped_item<Vec<u8>>, alt!(item | unwrap));
-named!(wrapped_program<Vec<u8>>, alt!(do_parse!(
+named!(
+    wrapped_program<Vec<u8>>,
+    alt!(
+        do_parse!(
                                take_while!(is_multispace)                        >>
                             v: eof                                               >>
                                (v))
-                              | do_parse!(
+            | do_parse!(
                                take_while!(is_multispace)                        >>
                          item: separated_list!(complete!(multispace),
                                                 complete!(wrapped_item))         >>
                                take_while!(is_multispace)                        >>
-                               (flatten_program(item)))));
+                               (flatten_program(item)))
+    )
+);
 
-named!(program<Vec<u8>>, alt!(do_parse!(
+named!(
+    program<Vec<u8>>,
+    alt!(
+        do_parse!(
                                take_while!(is_multispace)                        >>
                             v: eof                                               >>
                                (v))
-                              | do_parse!(
+            | do_parse!(
                                take_while!(is_multispace)                        >>
                          item: separated_list!(complete!(multispace),
                                                  complete!(item))                >>
                                take_while!(is_multispace)                        >>
-                               (flatten_program(item)))));
+                               (flatten_program(item)))
+    )
+);
 
 named!(pub programs<Vec<Vec<u8>>>, do_parse!(
                          item: separated_list!(complete!(tag!(b".")), program)   >>
                                (item)));
-
 
 /// Parses human-readable PumpkinScript
 ///
@@ -522,9 +616,9 @@ pub fn parse(script: &str) -> Result<Program, ParseError> {
 
 #[cfg(test)]
 mod tests {
-    use textparser::{parse, programs};
-    use num_bigint::BigUint;
     use core::str::FromStr;
+    use num_bigint::BigUint;
+    use crate::textparser::{parse, programs};
 
     #[test]
     fn test_empty() {
@@ -580,7 +674,7 @@ mod tests {
     #[test]
     fn test_one() {
         let script = parse("0xAABB").unwrap();
-        assert_eq!(script, vec![2, 0xaa,0xbb]);
+        assert_eq!(script, vec![2, 0xaa, 0xbb]);
         let script = parse("HELLO").unwrap();
         assert_eq!(script, vec![0x85, b'H', b'E', b'L', b'L', b'O']);
     }
@@ -696,10 +790,15 @@ mod tests {
     #[test]
     fn test_float64() {
         assert_eq!(parse("+1.3f64").unwrap(), parse("1.3f64").unwrap());
-        assert_eq!(parse("1.3f64").unwrap(), vec![8, 191, 244, 204, 204, 204, 204, 204, 205]);
-        assert_eq!(parse("-1.3f64").unwrap(), vec![8, 64, 11, 51, 51, 51, 51, 51, 50]);
+        assert_eq!(
+            parse("1.3f64").unwrap(),
+            vec![8, 191, 244, 204, 204, 204, 204, 204, 205]
+        );
+        assert_eq!(
+            parse("-1.3f64").unwrap(),
+            vec![8, 64, 11, 51, 51, 51, 51, 51, 50]
+        );
     }
-
 
     #[test]
     fn test_number_prefixed_instruction() {
@@ -710,19 +809,23 @@ mod tests {
     #[test]
     fn test_extra_spaces() {
         let script = parse(" 0xAABB  \"Hi\" ").unwrap();
-        assert_eq!(script, vec![2, 0xaa,0xbb, 2, b'H', b'i']);
+        assert_eq!(script, vec![2, 0xaa, 0xbb, 2, b'H', b'i']);
         let script = parse("[ 0xAABB  \"Hi\" ]").unwrap();
-        assert_eq!(script, vec![6, 2, 0xaa,0xbb, 2, b'H', b'i']);
+        assert_eq!(script, vec![6, 2, 0xaa, 0xbb, 2, b'H', b'i']);
     }
 
     #[test]
     fn test() {
         let script = parse("0xAABB DUP 0xFF00CC \"Hello\"").unwrap();
 
-        assert_eq!(script, vec![0x02, 0xAA, 0xBB, 0x83, b'D', b'U', b'P',
-                                0x03, 0xFF, 0x00, 0xCC, 0x05, b'H', b'e', b'l', b'l', b'o']);
+        assert_eq!(
+            script,
+            vec![
+                0x02, 0xAA, 0xBB, 0x83, b'D', b'U', b'P', 0x03, 0xFF, 0x00, 0xCC, 0x05, b'H', b'e',
+                b'l', b'l', b'o'
+            ]
+        );
     }
-
 
     #[test]
     fn test_empty_string() {
@@ -757,28 +860,47 @@ mod tests {
     fn test_programs() {
         let str = "SOMETHING : BURP DURP.\nBURP : DURP";
         let (_, mut progs) = programs(str.as_bytes()).unwrap();
-        assert_eq!(Vec::from(progs.pop().unwrap()), parse("BURP : DURP").unwrap());
-        assert_eq!(Vec::from(progs.pop().unwrap()), parse("SOMETHING : BURP DURP").unwrap());
+        assert_eq!(
+            Vec::from(progs.pop().unwrap()),
+            parse("BURP : DURP").unwrap()
+        );
+        assert_eq!(
+            Vec::from(progs.pop().unwrap()),
+            parse("SOMETHING : BURP DURP").unwrap()
+        );
     }
-
 
     #[test]
     fn unwrapping() {
-        assert_eq!(parse("[`val DUP]").unwrap(), parse("val 1 WRAP [DUP] CONCAT").unwrap());
+        assert_eq!(
+            parse("[`val DUP]").unwrap(),
+            parse("val 1 WRAP [DUP] CONCAT").unwrap()
+        );
         assert_eq!(parse("[`val]").unwrap(), parse("val 1 WRAP").unwrap());
-        assert_eq!(parse("[1 `val DUP]").unwrap(),
-                   parse("[1] val 1 WRAP [DUP] CONCAT CONCAT").unwrap());
-        assert_eq!(parse("[1 `val DUP `val]").unwrap(),
-                   parse("[1] val 1 WRAP [DUP] val 1 WRAP CONCAT CONCAT CONCAT").unwrap());
-        assert_eq!(parse("[1 `val]").unwrap(), parse("[1] val 1 WRAP CONCAT").unwrap());
+        assert_eq!(
+            parse("[1 `val DUP]").unwrap(),
+            parse("[1] val 1 WRAP [DUP] CONCAT CONCAT").unwrap()
+        );
+        assert_eq!(
+            parse("[1 `val DUP `val]").unwrap(),
+            parse("[1] val 1 WRAP [DUP] val 1 WRAP CONCAT CONCAT CONCAT").unwrap()
+        );
+        assert_eq!(
+            parse("[1 `val]").unwrap(),
+            parse("[1] val 1 WRAP CONCAT").unwrap()
+        );
     }
 
     #[test]
     fn nested_unwrapping() {
-        assert_eq!(parse("[[``val DUP]]").unwrap(),
-                   parse("val 1 WRAP [1 WRAP [DUP] CONCAT] CONCAT").unwrap());
-        assert_eq!(parse("[[2 ``val DUP]]").unwrap(),
-                   parse("[[2]] val 1 WRAP [1 WRAP [DUP] CONCAT CONCAT] CONCAT CONCAT").unwrap());
+        assert_eq!(
+            parse("[[``val DUP]]").unwrap(),
+            parse("val 1 WRAP [1 WRAP [DUP] CONCAT] CONCAT").unwrap()
+        );
+        assert_eq!(
+            parse("[[2 ``val DUP]]").unwrap(),
+            parse("[[2]] val 1 WRAP [1 WRAP [DUP] CONCAT CONCAT] CONCAT CONCAT").unwrap()
+        );
     }
 
     #[test]
@@ -788,5 +910,4 @@ mod tests {
         assert_eq!(parse("+1").unwrap(), vec![2, 1, 1]);
         assert_eq!(parse("-1").unwrap(), vec![2, 0, 255]);
     }
-
 }

@@ -24,8 +24,10 @@ instruction!(JSON_HASQ, b"\x89JSON/HAS?");
 instruction!(JSON_STRING_TO, b"\x8dJSON/STRING->");
 instruction!(JSON_TO_STRING, b"\x8dJSON/->STRING");
 
-use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size, STACK_TRUE, STACK_FALSE, TryInstruction};
+use super::{
+    offset_by_size, Dispatcher, Env, EnvId, Error, PassResult, TryInstruction, ERROR_EMPTY_STACK,
+    ERROR_INVALID_VALUE, STACK_FALSE, STACK_TRUE,
+};
 use serde_json as json;
 
 use std::marker::PhantomData;
@@ -64,35 +66,38 @@ builtins!("mod_json.psc");
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
         self.handle_builtins(env, instruction, pid)
-        .if_unhandled_try(|| self.handle_jsonq(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_json_objectq(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_json_stringq(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_json_numberq(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_json_booleanq(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_json_arrayq(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_json_nullq(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_json_get(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_json_hasq(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_json_set(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_json_string_to(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_json_to_string(env, instruction, pid))
-        .if_unhandled_try(|| Err(Error::UnknownInstruction))
+            .if_unhandled_try(|| self.handle_jsonq(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_json_objectq(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_json_stringq(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_json_numberq(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_json_booleanq(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_json_arrayq(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_json_nullq(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_json_get(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_json_hasq(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_json_set(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_json_string_to(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_json_to_string(env, instruction, pid))
+            .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
 
 impl<'a> Handler<'a> {
     pub fn new() -> Self {
-        Handler { phantom: PhantomData }
+        Handler {
+            phantom: PhantomData,
+        }
     }
 
     handle_builtins!();
 
     #[inline]
-    pub fn handle_jsonq(&mut self,
-                        env: &mut Env<'a>,
-                        instruction: &'a [u8],
-                        _: EnvId)
-                        -> PassResult<'a> {
+    pub fn handle_jsonq(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, JSONQ);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
 
@@ -105,66 +110,71 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_json_objectq(&mut self,
-                               env: &mut Env<'a>,
-                               instruction: &'a [u8],
-                               _: EnvId)
-                               -> PassResult<'a> {
+    pub fn handle_json_objectq(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         json_is_a!(env, instruction, JSON_OBJECTQ, Object)
     }
 
     #[inline]
-    pub fn handle_json_stringq(&mut self,
-                               env: &mut Env<'a>,
-                               instruction: &'a [u8],
-                               _: EnvId)
-                               -> PassResult<'a> {
+    pub fn handle_json_stringq(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         json_is_a!(env, instruction, JSON_STRINGQ, String)
     }
     #[inline]
-    pub fn handle_json_numberq(&mut self,
-                               env: &mut Env<'a>,
-                               instruction: &'a [u8],
-                               _: EnvId)
-                               -> PassResult<'a> {
+    pub fn handle_json_numberq(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         json_is_a!(env, instruction, JSON_NUMBERQ, Number)
     }
 
     #[inline]
-    pub fn handle_json_booleanq(&mut self,
-                                env: &mut Env<'a>,
-                                instruction: &'a [u8],
-                                _: EnvId)
-                                -> PassResult<'a> {
+    pub fn handle_json_booleanq(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         json_is_a!(env, instruction, JSON_BOOLEANQ, Bool)
     }
 
     #[inline]
-    pub fn handle_json_arrayq(&mut self,
-                              env: &mut Env<'a>,
-                              instruction: &'a [u8],
-                              _: EnvId)
-                              -> PassResult<'a> {
+    pub fn handle_json_arrayq(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         json_is_a!(env, instruction, JSON_ARRAYQ, Array)
     }
 
     #[inline]
-    pub fn handle_json_nullq(&mut self,
-                             env: &mut Env<'a>,
-                             instruction: &'a [u8],
-                             _: EnvId)
-                             -> PassResult<'a> {
-        json_is_a!(env, instruction, JSON_NULLQ, {
-            Null
-        })
+    pub fn handle_json_nullq(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
+        json_is_a!(env, instruction, JSON_NULLQ, { Null })
     }
 
     #[inline]
-    pub fn handle_json_get(&mut self,
-                           env: &mut Env<'a>,
-                           instruction: &'a [u8],
-                           _: EnvId)
-                           -> PassResult<'a> {
+    pub fn handle_json_get(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, JSON_GET);
 
         let field = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -176,16 +186,14 @@ impl<'a> Handler<'a> {
         };
 
         match json::from_slice::<json::Value>(a) {
-            Ok(json::Value::Object(mut map)) => {
-                match map.remove(&key) {
-                    Some(val) => {
-                        let s = val.to_string();
-                        let val = alloc_and_write!(s.as_bytes(), env);
-                        env.push(val);
-                    }
-                    None => return Err(error_invalid_value!(field)),
+            Ok(json::Value::Object(mut map)) => match map.remove(&key) {
+                Some(val) => {
+                    let s = val.to_string();
+                    let val = alloc_and_write!(s.as_bytes(), env);
+                    env.push(val);
                 }
-            }
+                None => return Err(error_invalid_value!(field)),
+            },
             Ok(_) => return Err(error_invalid_value!(a)),
             Err(_) => return Err(error_invalid_value!(a)),
         }
@@ -194,11 +202,12 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_json_hasq(&mut self,
-                            env: &mut Env<'a>,
-                            instruction: &'a [u8],
-                            _: EnvId)
-                            -> PassResult<'a> {
+    pub fn handle_json_hasq(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, JSON_HASQ);
 
         let field = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -225,11 +234,12 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_json_set(&mut self,
-                           env: &mut Env<'a>,
-                           instruction: &'a [u8],
-                           _: EnvId)
-                           -> PassResult<'a> {
+    pub fn handle_json_set(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, JSON_SET);
 
         let value = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -261,11 +271,12 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_json_string_to(&mut self,
-                                 env: &mut Env<'a>,
-                                 instruction: &'a [u8],
-                                 _: EnvId)
-                                 -> PassResult<'a> {
+    pub fn handle_json_string_to(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, JSON_STRING_TO);
 
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -283,11 +294,12 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_json_to_string(&mut self,
-                                 env: &mut Env<'a>,
-                                 instruction: &'a [u8],
-                                 _: EnvId)
-                                 -> PassResult<'a> {
+    pub fn handle_json_to_string(
+        &mut self,
+        env: &mut Env<'a>,
+        instruction: &'a [u8],
+        _: EnvId,
+    ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, JSON_TO_STRING);
 
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
