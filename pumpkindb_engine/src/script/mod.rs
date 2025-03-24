@@ -107,10 +107,7 @@ impl TryInstruction for Result<(), Error> {
     }
     #[inline]
     fn is_unhandled(&self) -> bool {
-        match self {
-            &Err(Error::UnknownInstruction) => true,
-            _ => false,
-        }
+        matches!(self, &Err(Error::UnknownInstruction))
     }
 }
 
@@ -343,9 +340,8 @@ pub const ERROR_NO_TX: &[u8] = b"\x01\x08";
 pub const ERROR_DATABASE: &[u8] = b"\x01\x09";
 pub const ERROR_NO_VALUE: &[u8] = b"\x01\x0A";
 
-use std::sync::Arc;
-
 use pumpkinscript::binparser;
+use std::sync::Arc;
 
 impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
     /// Creates an instance of Scheduler and a Sender
@@ -381,41 +377,38 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
         let mut len = 0;
         loop {
             // Borrow the front of the queue mutably
-            match envs.front_mut() {
-                Some(&mut (pid, ref mut env, ref chan)) => {
-                    let program = env.program[env.program.len() - 1];
-                    match self.pass(env, pid) {
-                        Err(Error::Reschedule) => {
-                            env.program.push(program);
-                        }
-                        Err(err) => {
+            if let Some(&mut (pid, ref mut env, ref chan)) = envs.front_mut() {
+                let program = env.program[env.program.len() - 1];
+                match self.pass(env, pid) {
+                    Err(Error::Reschedule) => {
+                        env.program.push(program);
+                    }
+                    Err(err) => {
+                        self.dispatcher.done(env, pid);
+                        let stack_size = env.stack().len();
+                        let _ = chan.send(ResponseMessage::EnvFailed(
+                            pid,
+                            err,
+                            Some(env.stack_copy()),
+                            Some(stack_size),
+                        ));
+                        pop_front = true;
+                    }
+                    Ok(()) => {
+                        if env.program.is_empty()
+                            || (env.program.len() == 1 && env.program[0].is_empty())
+                        {
                             self.dispatcher.done(env, pid);
                             let stack_size = env.stack().len();
-                            let _ = chan.send(ResponseMessage::EnvFailed(
+                            let _ = chan.send(ResponseMessage::EnvTerminated(
                                 pid,
-                                err,
-                                Some(env.stack_copy()),
-                                Some(stack_size),
+                                env.stack_copy(),
+                                stack_size,
                             ));
                             pop_front = true;
                         }
-                        Ok(()) => {
-                            if env.program.is_empty()
-                                || (env.program.len() == 1 && env.program[0].len() == 0)
-                            {
-                                self.dispatcher.done(env, pid);
-                                let stack_size = env.stack().len();
-                                let _ = chan.send(ResponseMessage::EnvTerminated(
-                                    pid,
-                                    env.stack_copy(),
-                                    stack_size,
-                                ));
-                                pop_front = true;
-                            }
-                        }
-                    };
-                }
-                None => (),
+                    }
+                };
             }
             // Drop the front of the queue if it's done
             if pop_front {
@@ -470,33 +463,33 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
 
     #[allow(unused_mut)]
     fn pass(&mut self, env: &mut Env<'a>, pid: EnvId) -> PassResult<'a> {
-        if env.program.len() == 0 {
+        if env.program.is_empty() {
             return Ok(());
         }
         let program = env.program.pop().unwrap();
-        if program.len() == 0 {
+        if program.is_empty() {
             return Ok(());
         }
         if let pumpkinscript::ParseResult::Done(rest, data) = binparser::data(program) {
             if env.aborting_try.is_empty() {
                 env.push(&data[offset_by_size(data.len())..]);
             }
-            if rest.len() > 0 {
+            if !rest.is_empty() {
                 env.program.push(rest);
             }
             Ok(())
         } else if let pumpkinscript::ParseResult::Done(rest, instruction) =
             binparser::instruction_or_internal_instruction(program)
         {
-            if rest.len() > 0 {
+            if !rest.is_empty() {
                 env.program.push(rest);
             }
-            let instruction_owned = instruction.clone();
+            let instruction_owned = instruction;
 
-            if rest.len() > 0 {
+            if !rest.is_empty() {
                 env.program.push(rest);
             }
-            if &[instruction_owned] != TRY_END && !env.aborting_try.is_empty() {
+            if [instruction_owned] != TRY_END && !env.aborting_try.is_empty() {
                 return Ok(());
             }
 
@@ -507,7 +500,7 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
                 }
                 Err(err @ Error::ProgramError(_)) => handle_error!(env, err),
                 Err(err) => Err(err),
-            }     
+            }
         } else {
             handle_error!(env, error_decoding!())
         }
@@ -518,7 +511,7 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
     fn handle_dictionary(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         if env.dictionary.contains_key(instruction) {
@@ -537,13 +530,13 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
     fn handle_dictionary(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         let mut found = false;
 
         for i in (0..env.dictionary.len()).rev() {
-            let ref dict = env.dictionary[i];
+            let dict = &env.dictionary[i];
             if let Some(def) = dict.get(instruction) {
                 env.program.push(def);
                 found = true;
@@ -559,7 +552,7 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
     }
 
     #[inline]
-    fn handle_try(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_try(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, TRY);
         let v = env.pop().ok_or_else(|| error_empty_stack!())?;
         env.tracking_errors += 1;
@@ -572,7 +565,7 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
     fn handle_try_end(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         pid: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, TRY_END);
@@ -593,7 +586,7 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
 }
 
 impl<'a, T: Dispatcher<'a>> Dispatcher<'a> for Scheduler<'a, T> {
-    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &[u8], pid: EnvId) -> PassResult<'a> {
         self.handle_try(env, instruction, pid)
             .if_unhandled_try(|| self.handle_try_end(env, instruction, pid))
             .if_unhandled_try(|| self.dispatcher.handle(env, instruction, pid))
@@ -615,6 +608,7 @@ mod tests {
     use criterion::{criterion_group, criterion_main, Criterion};
     use crossbeam;
     use lmdb;
+    use nom::{alt, do_parse, named, tag, take, IResult};
     use pumpkinscript::{offset_by_size, parse};
     use std::fs;
     use std::sync::mpsc;
@@ -630,7 +624,7 @@ mod tests {
         {
             assert_eq!(err, parsed_data!("[\"Test\" [\"123\"] 0x33]"));
         } else {
-            assert!(false);
+            unreachable!()
         }
     }
 
@@ -646,17 +640,43 @@ mod tests {
 
     #[test]
     fn test_constants() {
+        #![allow(dead_code)]
         use super::binparser;
         use pumpkinscript::ParseResult;
 
-        fn get_constant(name: &str) -> Option<Vec<u8>> {
+        fn get_constant(name: u8) -> Option<Vec<u8>> {
             match name {
-                "FIXATTRLEN" => Some(vec![20]),
-                "MYTEST" => Some(vec![21]),
+                b'F' => Some(vec![20]),
+                b'M' => Some(vec![21]),
                 _ => None,
             }
         }
 
+        named!(
+            pub instruction_or_internal_instruction<&[u8], u8>,
+            alt!(
+                do_parse!(
+                    constant_name: dynamic_constant >>
+                    ({
+                        match get_constant(constant_name) {
+                            Some(value) => value[0],
+                            None => {
+                                let bytes = constant_name.to_be_bytes();
+                                return IResult::Err(nom::Err::Error((b"failed", nom::error::ErrorKind::Alt)))
+                            }
+                        }
+                    })
+                )
+            )
+        );
+        named!(
+            pub dynamic_constant<&[u8], u8>,
+            do_parse!(
+                tag!("$") >>
+                name: take!(1) >>
+                (name[0])
+            )
+        );
         let input_fixattrlen = b"$FIXATTRLEN";
         let input_mytest = b"$MYTEST";
 
@@ -692,7 +712,7 @@ mod tests {
         });
 
         eval!("[DUP] TRY", env, result, {
-            assert!(!result.is_err());
+            assert!(result.is_ok());
             assert_eq!(
                 Vec::from(env.pop().unwrap()),
                 parsed_data!("[\"Empty stack\" [] 4]")
@@ -712,7 +732,7 @@ mod tests {
         });
 
         eval!("[[DUP] TRY 0x20 NOT] TRY", env, result, {
-            assert!(!result.is_err());
+            assert!(result.is_ok());
             assert_eq!(
                 Vec::from(env.pop().unwrap()),
                 parsed_data!("[\"Invalid value\" [0x20] 3]")

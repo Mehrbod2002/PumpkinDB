@@ -24,12 +24,18 @@ pub struct Handler<'a> {
 }
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
-    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &[u8], pid: EnvId) -> PassResult<'a> {
         self.handle_uuid_v4(env, instruction, pid)
             .if_unhandled_try(|| self.handle_uuid_v5(env, instruction, pid))
             .if_unhandled_try(|| self.handle_uuid_to_string(env, instruction, pid))
             .if_unhandled_try(|| self.handle_uuid_string_to(env, instruction, pid))
             .if_unhandled_try(|| Err(Error::UnknownInstruction))
+    }
+}
+
+impl<'a> Default for Handler<'a> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -44,7 +50,7 @@ impl<'a> Handler<'a> {
     pub fn handle_uuid_v4(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UUID_V4);
@@ -59,7 +65,7 @@ impl<'a> Handler<'a> {
     pub fn handle_uuid_v5(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UUID_V5);
@@ -84,7 +90,7 @@ impl<'a> Handler<'a> {
     pub fn handle_uuid_to_string(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UUID_TO_STRING);
@@ -106,7 +112,7 @@ impl<'a> Handler<'a> {
     pub fn handle_uuid_string_to(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UUID_STRING_TO);

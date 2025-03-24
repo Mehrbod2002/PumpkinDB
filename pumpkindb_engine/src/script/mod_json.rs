@@ -64,7 +64,7 @@ macro_rules! json_is_a {
 builtins!("mod_json.psc");
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
-    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &[u8], pid: EnvId) -> PassResult<'a> {
         self.handle_builtins(env, instruction, pid)
             .if_unhandled_try(|| self.handle_jsonq(env, instruction, pid))
             .if_unhandled_try(|| self.handle_json_objectq(env, instruction, pid))
@@ -82,6 +82,12 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
     }
 }
 
+impl<'a> Default for Handler<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'a> Handler<'a> {
     pub fn new() -> Self {
         Handler {
@@ -95,7 +101,7 @@ impl<'a> Handler<'a> {
     pub fn handle_jsonq(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, JSONQ);
@@ -113,7 +119,7 @@ impl<'a> Handler<'a> {
     pub fn handle_json_objectq(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         json_is_a!(env, instruction, JSON_OBJECTQ, Object)
@@ -123,7 +129,7 @@ impl<'a> Handler<'a> {
     pub fn handle_json_stringq(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         json_is_a!(env, instruction, JSON_STRINGQ, String)
@@ -132,7 +138,7 @@ impl<'a> Handler<'a> {
     pub fn handle_json_numberq(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         json_is_a!(env, instruction, JSON_NUMBERQ, Number)
@@ -142,7 +148,7 @@ impl<'a> Handler<'a> {
     pub fn handle_json_booleanq(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         json_is_a!(env, instruction, JSON_BOOLEANQ, Bool)
@@ -152,7 +158,7 @@ impl<'a> Handler<'a> {
     pub fn handle_json_arrayq(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         json_is_a!(env, instruction, JSON_ARRAYQ, Array)
@@ -162,7 +168,7 @@ impl<'a> Handler<'a> {
     pub fn handle_json_nullq(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         json_is_a!(env, instruction, JSON_NULLQ, { Null })
@@ -172,7 +178,7 @@ impl<'a> Handler<'a> {
     pub fn handle_json_get(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, JSON_GET);
@@ -205,7 +211,7 @@ impl<'a> Handler<'a> {
     pub fn handle_json_hasq(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, JSON_HASQ);
@@ -237,7 +243,7 @@ impl<'a> Handler<'a> {
     pub fn handle_json_set(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, JSON_SET);
@@ -274,7 +280,7 @@ impl<'a> Handler<'a> {
     pub fn handle_json_string_to(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, JSON_STRING_TO);
@@ -297,7 +303,7 @@ impl<'a> Handler<'a> {
     pub fn handle_json_to_string(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, JSON_TO_STRING);

@@ -22,7 +22,7 @@ pub struct Handler<'a, P: messaging::Publisher, S: messaging::Subscriber> {
 }
 
 impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Dispatcher<'a> for Handler<'a, P, S> {
-    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &[u8], pid: EnvId) -> PassResult<'a> {
         self.handle_publish(env, instruction, pid)
             .if_unhandled_try(|| self.handle_subscribe(env, instruction, pid))
             .if_unhandled_try(|| self.handle_unsubscribe(env, instruction, pid))
@@ -43,7 +43,7 @@ impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Handler<'a, P, S> {
     fn handle_publish(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, PUBLISH);
@@ -59,7 +59,7 @@ impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Handler<'a, P, S> {
     fn handle_subscribe(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, SUBSCRIBE);
@@ -82,7 +82,7 @@ impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Handler<'a, P, S> {
     fn handle_unsubscribe(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UNSUBSCRIBE);
@@ -124,7 +124,7 @@ mod tests {
             sender0.clone(),
             receiver0,
             {
-                assert!(!result.is_err());
+                assert!(result.is_ok());
 
                 let result = receiver0.recv_timeout(Duration::from_secs(1)).unwrap();
                 assert_eq!(result, (Vec::from("Topic"), Vec::from("Hello")));
@@ -138,7 +138,7 @@ mod tests {
             sender0.clone(),
             receiver0,
             {
-                assert!(!result.is_err());
+                assert!(result.is_ok());
                 assert!(receiver0.recv_timeout(Duration::from_secs(1)).is_err());
             }
         );
@@ -155,7 +155,7 @@ mod tests {
             sender0.clone(),
             receiver0,
             {
-                assert!(!result.is_err());
+                assert!(result.is_ok());
                 assert!(receiver0.recv_timeout(Duration::from_secs(1)).is_err());
             }
         );

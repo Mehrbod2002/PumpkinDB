@@ -28,9 +28,10 @@ impl MmapedFile {
     pub fn new(path: PathBuf, size: usize) -> Result<Self, io::Error> {
         let file = OpenOptions::new()
             .create(true)
+            .truncate(true)
             .write(true)
             .open(path.as_path())?;
-        let _ = file.set_len(size as u64)?;
+        file.set_len(size as u64)?;
         let mmap = Mmap::open_path(path.as_path(), Protection::ReadWrite)?;
         Ok(MmapedFile {
             size,
@@ -49,9 +50,7 @@ impl MmapedFile {
     }
 
     pub fn claim(&mut self, len: usize) -> Result<MmapedRegion, io::Error> {
-        let (mut new_view, view) = ::std::mem::replace(&mut self.mmap, None)
-            .unwrap()
-            .split_at(self.offset + len)?;
+        let (mut new_view, view) = self.mmap.take().unwrap().split_at(self.offset + len)?;
         new_view.restrict(0, len)?;
         self.mmap = Some(view);
         self.offset += len;
@@ -85,4 +84,4 @@ impl Write for MmapedRegion {
     }
 }
 
-impl<'a> NonVolatileMemory for MmapedRegion {}
+impl NonVolatileMemory for MmapedRegion {}

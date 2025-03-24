@@ -41,12 +41,7 @@ pub struct Handler<'a> {
 macro_rules! hash_instruction {
     ($name : ident, $constant: ident, $i: ident, $size: expr) => {
         #[inline]
-        pub fn $name(
-            &mut self,
-            env: &mut Env<'a>,
-            instruction: &'a [u8],
-            _: EnvId,
-        ) -> PassResult<'a> {
+        pub fn $name(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
             return_unless_instructions_equal!(instruction, $constant);
             let a = env.pop().ok_or_else(|| error_empty_stack!())?;
             let mut hasher = $i::new();
@@ -60,7 +55,7 @@ macro_rules! hash_instruction {
 }
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
-    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &[u8], pid: EnvId) -> PassResult<'a> {
         self.handle_hash_sha1(env, instruction, pid)
             .if_unhandled_try(|| self.handle_hash_sha224(env, instruction, pid))
             .if_unhandled_try(|| self.handle_hash_sha256(env, instruction, pid))
@@ -69,6 +64,12 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
             .if_unhandled_try(|| self.handle_hash_sha512_224(env, instruction, pid))
             .if_unhandled_try(|| self.handle_hash_sha512_256(env, instruction, pid))
             .if_unhandled_try(|| Err(Error::UnknownInstruction))
+    }
+}
+
+impl<'a> Default for Handler<'a> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

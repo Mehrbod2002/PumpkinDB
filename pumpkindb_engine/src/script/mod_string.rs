@@ -41,11 +41,17 @@ pub struct Handler<'a> {
 }
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
-    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &[u8], pid: EnvId) -> PassResult<'a> {
         self.handle_to_uint(env, instruction, pid)
             .if_unhandled_try(|| self.handle_to_int(env, instruction, pid))
             .if_unhandled_try(|| self.handle_to_sized_num(env, instruction, pid))
             .if_unhandled_try(|| Err(Error::UnknownInstruction))
+    }
+}
+
+impl<'a> Default for Handler<'a> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -60,7 +66,7 @@ impl<'a> Handler<'a> {
     pub fn handle_to_uint(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, STRING_TO_UINT);
@@ -78,7 +84,7 @@ impl<'a> Handler<'a> {
     pub fn handle_to_int(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, STRING_TO_INT);
@@ -97,7 +103,7 @@ impl<'a> Handler<'a> {
     pub fn handle_to_sized_num(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         let a = match instruction {

@@ -272,7 +272,7 @@ pub struct Handler<'a> {
 }
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
-    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &[u8], pid: EnvId) -> PassResult<'a> {
         self.handle_uint_add(env, instruction, pid)
             .if_unhandled_try(|| self.handle_uint_sub(env, instruction, pid))
             .if_unhandled_try(|| self.handle_int_add(env, instruction, pid))
@@ -312,6 +312,12 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
     }
 }
 
+impl<'a> Default for Handler<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'a> Handler<'a> {
     pub fn new() -> Self {
         Handler {
@@ -323,7 +329,7 @@ impl<'a> Handler<'a> {
     fn handle_uint_add(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT_ADD);
@@ -343,7 +349,7 @@ impl<'a> Handler<'a> {
     fn handle_int_add(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT_ADD);
@@ -363,7 +369,7 @@ impl<'a> Handler<'a> {
     fn handle_int_sub(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT_SUB);
@@ -383,7 +389,7 @@ impl<'a> Handler<'a> {
     fn handle_int_to_uint(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT_TO_UINT);
@@ -399,7 +405,7 @@ impl<'a> Handler<'a> {
     fn handle_uint_to_int(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT_TO_INT);
@@ -419,7 +425,7 @@ impl<'a> Handler<'a> {
     fn handle_uint_sub(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT_SUB);
@@ -445,7 +451,7 @@ impl<'a> Handler<'a> {
     fn handle_uint_equalq(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         uint_comparison!(env, instruction, UINT_EQUALQ, eq)
@@ -455,7 +461,7 @@ impl<'a> Handler<'a> {
     fn handle_uint_gtq(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         uint_comparison!(env, instruction, UINT_GTQ, gt)
@@ -465,7 +471,7 @@ impl<'a> Handler<'a> {
     fn handle_uint_ltq(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         uint_comparison!(env, instruction, UINT_LTQ, lt)
@@ -475,7 +481,7 @@ impl<'a> Handler<'a> {
     fn handle_int_equalq(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         int_comparison!(env, instruction, INT_EQUALQ, eq)
@@ -485,7 +491,7 @@ impl<'a> Handler<'a> {
     fn handle_int_gtq(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         int_comparison!(env, instruction, INT_GTQ, gt)
@@ -495,7 +501,7 @@ impl<'a> Handler<'a> {
     fn handle_int_ltq(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         int_comparison!(env, instruction, INT_LTQ, lt)
@@ -505,7 +511,7 @@ impl<'a> Handler<'a> {
     fn handle_uint8_add(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT8_ADD);
@@ -516,7 +522,7 @@ impl<'a> Handler<'a> {
     fn handle_uint8_sub(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT8_SUB);
@@ -527,7 +533,7 @@ impl<'a> Handler<'a> {
     fn handle_int8_add(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT8_ADD);
@@ -538,7 +544,7 @@ impl<'a> Handler<'a> {
     fn handle_int8_sub(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT8_SUB);
@@ -549,7 +555,7 @@ impl<'a> Handler<'a> {
     fn handle_uint16_add(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT16_ADD);
@@ -560,7 +566,7 @@ impl<'a> Handler<'a> {
     fn handle_uint16_sub(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT16_SUB);
@@ -571,7 +577,7 @@ impl<'a> Handler<'a> {
     fn handle_int16_add(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT16_ADD);
@@ -582,7 +588,7 @@ impl<'a> Handler<'a> {
     fn handle_int16_sub(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT16_SUB);
@@ -593,7 +599,7 @@ impl<'a> Handler<'a> {
     fn handle_uint32_add(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT32_ADD);
@@ -604,7 +610,7 @@ impl<'a> Handler<'a> {
     fn handle_uint32_sub(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT32_SUB);
@@ -615,7 +621,7 @@ impl<'a> Handler<'a> {
     fn handle_int32_add(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT32_ADD);
@@ -626,7 +632,7 @@ impl<'a> Handler<'a> {
     fn handle_int32_sub(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT32_SUB);
@@ -637,7 +643,7 @@ impl<'a> Handler<'a> {
     fn handle_uint64_add(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT64_ADD);
@@ -648,7 +654,7 @@ impl<'a> Handler<'a> {
     fn handle_uint64_sub(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT64_SUB);
@@ -659,7 +665,7 @@ impl<'a> Handler<'a> {
     fn handle_int64_add(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT64_ADD);
@@ -670,7 +676,7 @@ impl<'a> Handler<'a> {
     fn handle_int64_sub(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT64_SUB);
@@ -681,7 +687,7 @@ impl<'a> Handler<'a> {
     fn handle_f32_add(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, F32_ADD);
@@ -702,7 +708,7 @@ impl<'a> Handler<'a> {
     fn handle_f32_sub(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, F32_SUB);
@@ -723,7 +729,7 @@ impl<'a> Handler<'a> {
     fn handle_f64_add(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, F64_ADD);
@@ -744,7 +750,7 @@ impl<'a> Handler<'a> {
     fn handle_f64_sub(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, F64_SUB);
@@ -765,7 +771,7 @@ impl<'a> Handler<'a> {
     fn handle_uint_to_string(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT_TO_STRING);
@@ -784,7 +790,7 @@ impl<'a> Handler<'a> {
     fn handle_int_to_string(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT_TO_STRING);
@@ -803,7 +809,7 @@ impl<'a> Handler<'a> {
     fn handle_to_string(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         let s = match instruction {

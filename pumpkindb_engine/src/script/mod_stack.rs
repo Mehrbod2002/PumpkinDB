@@ -39,7 +39,7 @@ pub struct Handler<'a> {
 builtins!("mod_stack.psc");
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
-    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &[u8], pid: EnvId) -> PassResult<'a> {
         self.handle_builtins(env, instruction, pid)
             .if_unhandled_try(|| self.handle_drop(env, instruction, pid))
             .if_unhandled_try(|| self.handle_dup(env, instruction, pid))
@@ -60,6 +60,12 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
     }
 }
 
+impl<'a> Default for Handler<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'a> Handler<'a> {
     pub fn new() -> Self {
         Handler {
@@ -70,7 +76,7 @@ impl<'a> Handler<'a> {
     handle_builtins!();
 
     #[inline]
-    fn handle_dup(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_dup(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, DUP);
         let v = env.pop().ok_or_else(|| error_empty_stack!())?;
 
@@ -80,12 +86,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_3dup(
-        &mut self,
-        env: &mut Env<'a>,
-        instruction: &'a [u8],
-        _: EnvId,
-    ) -> PassResult<'a> {
+    fn handle_3dup(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, THREEDUP);
         let c = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -103,12 +104,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_swap(
-        &mut self,
-        env: &mut Env<'a>,
-        instruction: &'a [u8],
-        _: EnvId,
-    ) -> PassResult<'a> {
+    fn handle_swap(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, SWAP);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -120,12 +116,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_2swap(
-        &mut self,
-        env: &mut Env<'a>,
-        instruction: &'a [u8],
-        _: EnvId,
-    ) -> PassResult<'a> {
+    fn handle_2swap(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, TWOSWAP);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -142,12 +133,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_over(
-        &mut self,
-        env: &mut Env<'a>,
-        instruction: &'a [u8],
-        _: EnvId,
-    ) -> PassResult<'a> {
+    fn handle_over(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, OVER);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -160,12 +146,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_2over(
-        &mut self,
-        env: &mut Env<'a>,
-        instruction: &'a [u8],
-        _: EnvId,
-    ) -> PassResult<'a> {
+    fn handle_2over(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, TWOOVER);
         let d = env.pop().ok_or_else(|| error_empty_stack!())?;
         let c = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -183,7 +164,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_rot(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_rot(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, ROT);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -197,12 +178,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_2rot(
-        &mut self,
-        env: &mut Env<'a>,
-        instruction: &'a [u8],
-        _: EnvId,
-    ) -> PassResult<'a> {
+    fn handle_2rot(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, TWOROT);
         let f = env.pop().ok_or_else(|| error_empty_stack!())?;
         let e = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -222,12 +198,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_drop(
-        &mut self,
-        env: &mut Env<'a>,
-        instruction: &'a [u8],
-        _: EnvId,
-    ) -> PassResult<'a> {
+    fn handle_drop(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, DROP);
         let _ = env.pop().ok_or_else(|| error_empty_stack!())?;
 
@@ -235,12 +206,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_3drop(
-        &mut self,
-        env: &mut Env<'a>,
-        instruction: &'a [u8],
-        _: EnvId,
-    ) -> PassResult<'a> {
+    fn handle_3drop(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, THREEDROP);
         let _ = env.pop().ok_or_else(|| error_empty_stack!())?;
         let _ = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -250,12 +216,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_depth(
-        &mut self,
-        env: &mut Env<'a>,
-        instruction: &'a [u8],
-        _: EnvId,
-    ) -> PassResult<'a> {
+    fn handle_depth(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, DEPTH);
         let stack_size = env.stack().len();
         let bytes = BigUint::from(stack_size).to_bytes_be();
@@ -265,12 +226,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_wrap(
-        &mut self,
-        env: &mut Env<'a>,
-        instruction: &'a [u8],
-        _: EnvId,
-    ) -> PassResult<'a> {
+    fn handle_wrap(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, WRAP);
         let n = env.pop().ok_or_else(|| error_empty_stack!())?;
 
@@ -303,15 +259,10 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_unwrap(
-        &mut self,
-        env: &mut Env<'a>,
-        instruction: &'a [u8],
-        _: EnvId,
-    ) -> PassResult<'a> {
+    fn handle_unwrap(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UNWRAP);
         let mut current = env.pop().ok_or_else(|| error_empty_stack!())?;
-        while current.len() > 0 {
+        while !current.is_empty() {
             match binparser::data(current) {
                 pumpkinscript::ParseResult::Done(rest, val) => {
                     env.push(&val[offset_by_size(val.len())..]);
@@ -324,19 +275,14 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_push(
-        &mut self,
-        env: &mut Env<'a>,
-        instruction: &'a [u8],
-        _: EnvId,
-    ) -> PassResult<'a> {
+    fn handle_push(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, PUSH);
         env.push_stack();
         Ok(())
     }
 
     #[inline]
-    fn handle_pop(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_pop(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, POP);
         if !env.pop_stack() {
             Err(error_empty_stack!())

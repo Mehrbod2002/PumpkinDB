@@ -34,7 +34,7 @@ macro_rules! handle_builtins {
         #[inline]
         fn handle_builtins(&mut self,
                            env: &mut Env<'a>,
-                           instruction: &'a [u8],
+                           instruction: &[u8],
                            _: EnvId)
                            -> PassResult<'a> {
             match BUILTINS.get(instruction) {
@@ -213,10 +213,15 @@ macro_rules! error_unknown_instruction {
 macro_rules! alloc_slice {
     ($size: expr, $env: expr) => {{
         let slice = $env.alloc($size);
-        if slice.is_err() {
-            return Err(slice.unwrap_err());
-        }
-        slice.unwrap()
+        slice?
+    }};
+}
+
+#[allow(unused_macros)]
+macro_rules! alloc_slice {
+    ($size: expr, $env: expr) => {{
+        let slice = $env.alloc($size);
+        slice?
     }};
 }
 

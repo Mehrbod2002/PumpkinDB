@@ -39,7 +39,7 @@ impl<'a, N> Dispatcher<'a> for Handler<'a, N>
 where
     N: NonVolatileMemory,
 {
-    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &[u8], pid: EnvId) -> PassResult<'a> {
         self.handle_hlc(env, instruction, pid)
             .if_unhandled_try(|| self.handle_hlc_lc(env, instruction, pid))
             .if_unhandled_try(|| self.handle_hlc_tick(env, instruction, pid))
@@ -60,11 +60,11 @@ where
     }
 
     #[inline]
-    pub fn handle_hlc(&self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    pub fn handle_hlc(&self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, HLC);
         let now = self.timestamp.hlc();
         let slice = alloc_slice!(16, env);
-        let _ = now.write_bytes(&mut slice[0..]).unwrap();
+        now.write_bytes(&mut slice[0..]).unwrap();
         env.push(slice);
         Ok(())
     }
@@ -73,7 +73,7 @@ where
     pub fn handle_hlc_tick(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, HLC_TICK);
@@ -96,7 +96,7 @@ where
         t1.count += 1;
 
         let slice = alloc_slice!(16, env);
-        let _ = t1.write_bytes(&mut slice[0..]).unwrap();
+        t1.write_bytes(&mut slice[0..]).unwrap();
         env.push(slice);
 
         Ok(())
@@ -106,7 +106,7 @@ where
     pub fn handle_hlc_lc(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, HLC_LC);
@@ -138,7 +138,7 @@ where
     pub fn handle_hlc_observe(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, HLC_OBSERVE);
@@ -149,7 +149,7 @@ where
                 }
 
                 let slice = alloc_slice!(16, env);
-                let _ = self.timestamp.hlc().write_bytes(&mut slice[0..]).unwrap();
+                self.timestamp.hlc().write_bytes(&mut slice[0..]).unwrap();
 
                 env.push(slice);
 

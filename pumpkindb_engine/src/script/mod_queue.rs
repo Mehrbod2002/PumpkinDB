@@ -23,13 +23,19 @@ pub struct Handler<'a> {
 }
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
-    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &[u8], pid: EnvId) -> PassResult<'a> {
         self.handle_to_bq(env, instruction, pid)
             .if_unhandled_try(|| self.handle_from_bq(env, instruction, pid))
             .if_unhandled_try(|| self.handle_to_fq(env, instruction, pid))
             .if_unhandled_try(|| self.handle_from_fq(env, instruction, pid))
             .if_unhandled_try(|| self.handle_qq(env, instruction, pid))
             .if_unhandled_try(|| Err(Error::UnknownInstruction))
+    }
+}
+
+impl<'a> Default for Handler<'a> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -41,12 +47,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_to_bq(
-        &mut self,
-        env: &mut Env<'a>,
-        instruction: &'a [u8],
-        _: EnvId,
-    ) -> PassResult<'a> {
+    fn handle_to_bq(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, TO_BQ);
         let val = env.pop().ok_or_else(|| error_empty_stack!())?;
         env.queue_back_push(val);
@@ -57,7 +58,7 @@ impl<'a> Handler<'a> {
     fn handle_from_bq(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, FROM_BQ);
@@ -71,12 +72,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_to_fq(
-        &mut self,
-        env: &mut Env<'a>,
-        instruction: &'a [u8],
-        _: EnvId,
-    ) -> PassResult<'a> {
+    fn handle_to_fq(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, TO_FQ);
         let val = env.pop().ok_or_else(|| error_empty_stack!())?;
         env.queue_front_push(val);
@@ -87,7 +83,7 @@ impl<'a> Handler<'a> {
     fn handle_from_fq(
         &mut self,
         env: &mut Env<'a>,
-        instruction: &'a [u8],
+        instruction: &[u8],
         _: EnvId,
     ) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, FROM_FQ);
@@ -101,7 +97,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_qq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_qq(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, QQ);
         if env.queue_empty() {
             env.push(STACK_FALSE);

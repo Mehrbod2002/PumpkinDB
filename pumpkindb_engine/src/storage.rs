@@ -21,7 +21,7 @@ use core::ops::Deref;
 
 impl<'a> WriteTransactionContainer<'a> {
     pub fn commit(mut self) -> Result<(), lmdb::Error> {
-        let commit = ::std::mem::replace(&mut self.0, None).unwrap().commit();
+        let commit = self.0.take().unwrap().commit();
         let _ = self
             .1
             .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst);

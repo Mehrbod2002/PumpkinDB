@@ -144,6 +144,12 @@ mod simple {
         }
     }
 
+    impl Default for Simple {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl Simple {
         pub fn new() -> Self {
             let (sender, receiver) = mpsc::channel();

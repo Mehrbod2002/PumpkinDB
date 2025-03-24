@@ -12,24 +12,24 @@ pub trait Dispatcher<'a> {
     fn init(&mut self, env: &mut Env<'a>, pid: EnvId) {}
     #[allow(unused_variables)]
     fn done(&mut self, env: &mut Env<'a>, pid: EnvId) {}
-    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a>;
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &[u8], pid: EnvId) -> PassResult<'a>;
 }
 
 include!("macros.rs");
 
 impl<'a> Dispatcher<'a> for Vec<Box<dyn Dispatcher<'a>>> {
     fn init(&mut self, env: &mut Env<'a>, pid: EnvId) {
-        for disp in self.into_iter() {
+        for disp in self.iter_mut() {
             disp.init(env, pid);
         }
     }
     fn done(&mut self, env: &mut Env<'a>, pid: EnvId) {
-        for disp in self.into_iter() {
+        for disp in self.iter_mut() {
             disp.done(env, pid);
         }
     }
-    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        let mut iter = self.into_iter();
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &[u8], pid: EnvId) -> PassResult<'a> {
+        let mut iter = self.iter_mut();
         loop {
             match iter.next() {
                 None => break,
@@ -47,65 +47,65 @@ impl<'a> Dispatcher<'a> for Vec<Box<dyn Dispatcher<'a>>> {
 }
 
 macro_rules! for_each_dispatcher {
-    ($module: ident, $dispatcher : expr, $expr: expr) => {{
+    ($module: ident, $dispatcher: expr, $expr: expr) => {{
         #[cfg(feature = "mod_core")]
         {
-            let ref mut $module = $dispatcher.core;
+            let $module = &mut $dispatcher.core;
             $expr
         }
         #[cfg(feature = "mod_stack")]
         {
-            let ref mut $module = $dispatcher.stack;
+            let $module = &mut $dispatcher.stack;
             $expr
         }
         #[cfg(feature = "mod_queue")]
         {
-            let ref mut $module = $dispatcher.queue;
+            let $module = &mut $dispatcher.queue;
             $expr
         }
         #[cfg(feature = "mod_binaries")]
         {
-            let ref mut $module = $dispatcher.binaries;
+            let $module = &mut $dispatcher.binaries;
             $expr
         }
         #[cfg(feature = "mod_numbers")]
         {
-            let ref mut $module = $dispatcher.numbers;
+            let $module = &mut $dispatcher.numbers;
             $expr
         }
         #[cfg(feature = "mod_storage")]
         {
-            let ref mut $module = $dispatcher.storage;
+            let $module = &mut $dispatcher.storage;
             $expr
         }
         #[cfg(feature = "mod_hash")]
         {
-            let ref mut $module = $dispatcher.hash;
+            let $module = &mut $dispatcher.hash;
             $expr
         }
         #[cfg(feature = "mod_hlc")]
         {
-            let ref mut $module = $dispatcher.hlc;
+            let $module = &mut $dispatcher.hlc;
             $expr
         }
         #[cfg(feature = "mod_json")]
         {
-            let ref mut $module = $dispatcher.json;
+            let $module = &mut $dispatcher.json;
             $expr
         }
         #[cfg(feature = "mod_msg")]
         {
-            let ref mut $module = $dispatcher.msg;
+            let $module = &mut $dispatcher.msg;
             $expr
         }
         #[cfg(feature = "mod_uuid")]
         {
-            let ref mut $module = $dispatcher.uuid;
+            let $module = &mut $dispatcher.uuid;
             $expr
         }
         #[cfg(feature = "mod_string")]
         {
-            let ref mut $module = $dispatcher.string;
+            let $module = &mut $dispatcher.string;
             $expr
         }
     }};
@@ -201,7 +201,7 @@ where
     fn done(&mut self, env: &mut Env<'a>, pid: EnvId) {
         for_each_dispatcher!(disp, self, disp.done(env, pid));
     }
-    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &[u8], pid: EnvId) -> PassResult<'a> {
         for_each_dispatcher!(disp, self, {
             let result = disp.handle(env, instruction, pid);
             if !result.is_unhandled() {
@@ -240,7 +240,7 @@ mod tests {
         pub fn handle_test(
             &mut self,
             env: &mut Env<'a>,
-            instruction: &'a [u8],
+            instruction: &[u8],
             _: EnvId,
         ) -> PassResult<'a> {
             return_unless_instructions_equal!(instruction, b"\x84TEST");
@@ -250,12 +250,7 @@ mod tests {
     }
 
     impl<'a> Dispatcher<'a> for MyDispatcher<'a> {
-        fn handle(
-            &mut self,
-            env: &mut Env<'a>,
-            instruction: &'a [u8],
-            pid: EnvId,
-        ) -> PassResult<'a> {
+        fn handle(&mut self, env: &mut Env<'a>, instruction: &[u8], pid: EnvId) -> PassResult<'a> {
             self.handle_test(env, instruction, pid)
                 .if_unhandled_try(|| Err(Error::UnknownInstruction))
         }
@@ -276,8 +271,8 @@ mod tests {
                 Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
                     // terminated without an error
                     let mut stack_ = Vec::with_capacity(stack.len());
-                    for i in 0..(&stack).len() {
-                        stack_.push((&stack[i]).as_slice());
+                    for item in stack.iter() {
+                        stack_.push(item.as_slice());
                     }
                     let mut script_env = Env::new_with_stack(stack_).unwrap();
                     let val = script_env.pop().unwrap();
@@ -293,7 +288,7 @@ mod tests {
                 }
             }
             sender_.shutdown();
-            let _ = handle.join();
+            handle.join();
         });
     }
 }

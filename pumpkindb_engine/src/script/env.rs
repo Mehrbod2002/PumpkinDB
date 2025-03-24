@@ -118,7 +118,7 @@ impl<'a> Env<'a> {
     /// Returns the entire stack
     #[inline]
     pub fn stack(&self) -> &[&'a [u8]] {
-        &self.stack.front().unwrap()
+        self.stack.front().unwrap()
     }
 
     /// Returns a copy of the entire stack
@@ -127,7 +127,7 @@ impl<'a> Env<'a> {
         self.stack
             .front()
             .unwrap()
-            .into_iter()
+            .iter()
             .map(|v| Vec::from(*v))
             .collect()
     }
@@ -140,7 +140,7 @@ impl<'a> Env<'a> {
         if len == 0 {
             None
         } else {
-            Some(&s[len - 1])
+            Some(s[len - 1])
         }
     }
 
@@ -170,7 +170,7 @@ impl<'a> Env<'a> {
     #[cfg(feature = "scoped_dictionary")]
     pub fn pop_dictionary(&mut self) {
         self.dictionary.pop();
-        if self.dictionary.len() == 0 {
+        if self.dictionary.is_empty() {
             self.dictionary.push(BTreeMap::new());
         }
     }

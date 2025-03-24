@@ -13,6 +13,11 @@ pub struct Timestamp<N: NonVolatileMemory> {
     clock: Mutex<(hlc::Clock<hlc::Wall>, N)>,
 }
 
+#[derive(Debug)]
+pub enum ObserveError {
+    InvalidTimestamp,
+}
+
 impl<N: NonVolatileMemory> Timestamp<N> {
     /// Create a new Timestamp clock. First the passed in memory map will be checked to check if
     /// a previous timestamp exists. If one exists (i.e. if the results aren't 20 bytes of 0) it
@@ -41,14 +46,14 @@ impl<N: NonVolatileMemory> Timestamp<N> {
         now
     }
 
-    pub fn observe(&self, other_time: &hlc::Timestamp<hlc::WallT>) -> Result<(), ()> {
+    pub fn observe(&self, other_time: &hlc::Timestamp<hlc::WallT>) -> Result<(), ObserveError> {
         let mut clock = self.clock.lock().unwrap();
-        match clock.0.observe(&other_time) {
+        match clock.0.observe(other_time) {
             Ok(_) => {
-                let _ = clock.0.now().write_bytes(&mut clock.1).unwrap();
+                clock.0.now().write_bytes(&mut clock.1).unwrap();
                 Ok(())
             }
-            Err(_) => Err(()),
+            Err(_) => Err(ObserveError::InvalidTimestamp),
         }
     }
 }
@@ -79,7 +84,7 @@ mod tests {
         // is ordered that way) holds.
         let mut nvmem = MmapedFile::new_anonymous(20).unwrap();
         let mut clock = hlc::Clock::wall();
-        clock.set_epoch(u32::max_value());
+        clock.set_epoch(u32::MAX);
         let now = clock.now();
         let mut region = nvmem.claim(20).unwrap();
         let _ = &now.write_bytes(&mut region).unwrap();

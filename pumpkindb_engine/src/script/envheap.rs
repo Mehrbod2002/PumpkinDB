@@ -48,7 +48,7 @@ impl EnvHeap {
                 }
             } else {
                 let (mut ptr, mut chunk) = self.chunks.pop().unwrap();
-                let slice_ptr = unsafe { chunk.as_mut_ptr().offset(ptr as isize) };
+                let slice_ptr = unsafe { chunk.as_mut_ptr().add(ptr) };
                 ptr += size;
                 self.chunks.push((ptr, chunk));
                 return unsafe { slice::from_raw_parts_mut(slice_ptr, size) };

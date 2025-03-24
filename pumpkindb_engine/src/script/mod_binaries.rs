@@ -29,7 +29,7 @@ pub struct Handler<'a> {
 builtins!("mod_binaries.psc");
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
-    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &[u8], pid: EnvId) -> PassResult<'a> {
         self.handle_builtins(env, instruction, pid)
             .if_unhandled_try(|| self.handle_ltp(env, instruction, pid))
             .if_unhandled_try(|| self.handle_gtp(env, instruction, pid))
@@ -39,6 +39,12 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
             .if_unhandled_try(|| self.handle_pad(env, instruction, pid))
             .if_unhandled_try(|| self.handle_length(env, instruction, pid))
             .if_unhandled_try(|| Err(Error::UnknownInstruction))
+    }
+}
+
+impl<'a> Default for Handler<'a> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -52,12 +58,7 @@ impl<'a> Handler<'a> {
     handle_builtins!();
 
     #[inline]
-    fn handle_equal(
-        &mut self,
-        env: &mut Env<'a>,
-        instruction: &'a [u8],
-        _: EnvId,
-    ) -> PassResult<'a> {
+    fn handle_equal(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, EQUALQ);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -72,7 +73,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_ltp(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_ltp(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, LTQ);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -87,7 +88,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_gtp(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_gtp(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, GTQ);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -102,12 +103,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_concat(
-        &mut self,
-        env: &mut Env<'a>,
-        instruction: &'a [u8],
-        _: EnvId,
-    ) -> PassResult<'a> {
+    fn handle_concat(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, CONCAT);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -123,12 +119,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_slice(
-        &mut self,
-        env: &mut Env<'a>,
-        instruction: &'a [u8],
-        _: EnvId,
-    ) -> PassResult<'a> {
+    fn handle_slice(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, SLICE);
         let end = env.pop().ok_or_else(|| error_empty_stack!())?;
         let start = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -156,7 +147,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_pad(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_pad(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, PAD);
         let byte = env.pop().ok_or_else(|| error_empty_stack!())?;
         let size = env.pop().ok_or_else(|| error_empty_stack!())?;
@@ -178,8 +169,8 @@ impl<'a> Handler<'a> {
 
         let slice = alloc_slice!(size_int, env);
 
-        for i in 0..size_int - value.len() {
-            slice[i] = byte[0];
+        for item in slice.iter_mut().take(size_int - value.len()) {
+            *item = byte[0];
         }
         slice[size_int - value.len()..].copy_from_slice(value);
 
@@ -189,12 +180,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_length(
-        &mut self,
-        env: &mut Env<'a>,
-        instruction: &'a [u8],
-        _: EnvId,
-    ) -> PassResult<'a> {
+    fn handle_length(&mut self, env: &mut Env<'a>, instruction: &[u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, LENGTH);
         let a = env.pop().ok_or_else(|| error_empty_stack!())?;
 
