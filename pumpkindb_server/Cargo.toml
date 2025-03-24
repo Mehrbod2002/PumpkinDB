@@ -1,6 +1,7 @@
 [package]
 name = "pumpkindb_server"
 version = "0.2.0"
+edition = "2021"
 description = "PumpkinDB server"
 license = "MPL-2.0"
 repository = "https://github.com/PumpkinDB/PumpkinDB"
@@ -17,8 +18,7 @@ path = "src/main.rs"
 
 [dependencies]
 clap = "2.22.1"
-config = "0.3.1"
-lazy_static = "0.2.2"
+config = "0.15.11"
 num_cpus = "1.3.0"
 log = "0.3.6"
 log4rs = { version = "0.6.1", features = ["toml_format"] }
@@ -26,3 +26,5 @@ mio = "0.6.4"
 
 pumpkindb_engine = { version = "0.2", path = "../pumpkindb_engine" }
 pumpkindb_mio_server = { version = "0.2", path = "../pumpkindb_mio_server" }
+mio-extras = "2.0.6"
+once_cell = "1.21.1"
